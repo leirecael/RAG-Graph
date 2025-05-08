@@ -2,9 +2,9 @@ from llm.llm_client import call_llm
 
 async def create_cypher_query(queston, all_relevant_nodes):
     prompt = f"""
-        Tu tarea es generar una consulta Cypher válida que conecte los siguientes nodos entre sí a través de relaciones predefinidas.
+        Your task is to generate a valid Cypher query that connects the following nodes using only the predefined relationships.
 
-        ### Relaciones válidas:
+        ### Allowed Relationships:
         - (problem)-[:arisesAt]->(context)
         - (problem)-[:concerns]->(stakeholder)
         - (problem)-[:informs]->(goal)
@@ -12,19 +12,19 @@ async def create_cypher_query(queston, all_relevant_nodes):
         - (problem)-[:addressedBy]->(artifactClass)
         - (goal)-[:achievedBy]->(requirement)
 
-        ### Reglas de construcción:
-        1. **Nombres de nodos**: Usa el nombre del tipo como etiqueta (`(p:problem)`, `(c:context)`) y una letra como alias.
-        2. **PrimaryQuestion**: Si una entidad tiene valor `"PrimaryQuestion"`, es el nodo principal. No filtres por `name = ...`, solo asegúrate que `name IS NOT NULL`.
-        3. **Filtros**: Para entidades no "PrimaryQuestion", usa `WHERE n.name = '...'` o `IN ['a', 'b']` según el caso.
-        4. **Relaciones múltiples**: Si se necesitan múltiples instancias de una entidad (por ejemplo, dos `problem`), usa alias diferentes (`p1`, `p2`) y asegúrate de usar `p1 <> p2` para que no sean el mismo nodo.
-        5. **MATCH**: Incluye todos los nodos mencionados y las relaciones relevantes entre ellos, según las relaciones permitidas.
-        6. **WITH DISTINCT**: Siempre úsalo para evitar duplicados.
-        7. **RETURN**: Devuelve los nodos involucrados con `n.name`, `n.description`, y `labels(n)`.
-        8. **No relaciones innecesarias**: Si solo hay una entidad, no construyas relaciones. Solo filtra y devuelve.
+        ### Construction Rules:
+        1. **Node labels**: Use type as label (e.g. `(p:problem)`) and a short alias.
+        2. **PrimaryQuestion**: For entities marked `"PrimaryQuestion"`, use `name IS NOT NULL`, no filtering by specific value.
+        3. **Filters**: Use `WHERE n.name = '...'` or `IN [...]` for non-primary entities.
+        4. **Multiple instances**: For repeated entity types (e.g. two `problem` nodes), use different aliases (`p1`, `p2`) and ensure `p1 <> p2`.
+        5. **MATCH**: Include only the necessary nodes and relationships based on what's present.
+        6. **WITH DISTINCT**: Always use it to avoid duplicates.
+        7. **RETURN**: Return `.name`, `.description`, and `labels(...)` for all matched nodes.
+        8. **Single entity**: If only one node type is provided, just filter and return it, no relationships needed.
 
-        ### Ejemplo:
-        Pregunta: ¿Qué problemas afectan al mismo contexto?
-        Consulta esperada:
+        ### Example:
+        Question: What problems affect the same context?
+        Cypher:
         MATCH (p1:problem), (c:context), (p2:problem)
         MATCH (p1)-[:arisesAt]->(c)<-[:arisesAt]-(p2)
         WHERE p1.name IS NOT NULL AND c.name IS NOT NULL AND p1 <> p2
@@ -33,12 +33,12 @@ async def create_cypher_query(queston, all_relevant_nodes):
             p2.name, p2.description, labels(p2),
             c.name, c.description, labels(c)
 
-        Devuelve **solo la consulta Cypher**. Nada más.
+        Return **only the Cypher query**. Nothing else.
 
-        Pregunta: {queston}
-        Nodos disponibles: {all_relevant_nodes}
-        
+        Question: {queston}
+        Available nodes: {all_relevant_nodes}
     """
+
 
     query,cost = await call_llm(prompt)
     return query, cost
@@ -65,10 +65,10 @@ def build_cypher_query(entities: dict) -> str:
         alias_set.update(alias)
         match_clauses.append(f"({alias}:{entity_type})")
         
-        if value != "PrimaryQuestion":
+        if not value["result"] is None:
             
-            if isinstance(value, list):
-                names = "', '".join(value)
+            if isinstance(value["result"], list):
+                names = "', '".join(value["result"])
                 where_clauses.append(f"{alias}.name IN ['{names}']")
             else:
                 where_clauses.append(f"{alias}.name = '{value}'")

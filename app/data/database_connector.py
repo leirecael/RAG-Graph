@@ -1,10 +1,11 @@
-from neo4j import GraphDatabase
+from neo4j import GraphDatabase, AsyncGraphDatabase
 from config.config import NEO4J_URI,NEO4J_PASSWORD,NEO4J_USER
 import json
 
-driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+async def get_driver():
+    return AsyncGraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
 
-def get_similar_nodes_by_entity(entity: str, embedding: list[float], threshold: float = 0.45, top_k: int = 5):
+async def get_similar_nodes_by_entity(entity: str, embedding: list[float], threshold: float = 0.45, top_k: int = 5):
     query = f"""
     WITH $embedding AS embedding
     MATCH (n:{entity})
@@ -15,36 +16,23 @@ def get_similar_nodes_by_entity(entity: str, embedding: list[float], threshold: 
     ORDER BY similarity DESC
     LIMIT $top_k
     """
-    with driver.session() as session:
-        result = session.run(query, {
+    driver = await get_driver()
+    async with driver.session() as session:
+        result = await session.run(query, {
             "embedding": embedding,
             "threshold": threshold,
             "top_k": top_k
         })
-        return [record["name"] for record in result]#return [{"node": record["name"], "similarity": record["similarity"]} for record in result]
+        records = await result.values()
+        return [name for name, _ in records]#return [record["name"] for record in records]
 
 
-def execute_query(cypher_query: str, parameters: dict = None):
-    with driver.session() as session:
-        result = session.run(cypher_query, parameters or {})
-        records = [record.data() for record in result]
-        print(json.dumps(records, indent=2))
+async def execute_query(cypher_query: str, parameters: dict = None):
+    driver = await get_driver()
+    async with driver.session() as session:
+        result = await session.run(cypher_query, parameters or {})
+        records = await result.data()
         return extract_unique_entities(records)
-
-
-def close_connection():
-    driver.close()
-
-def prueba(embedding):
-    query = f"""WITH $embedding AS consulta_vector
-        MATCH (n:stakeholder {{name: "software developers"}})
-        WHERE n.embedding IS NOT NULL
-        RETURN gds.similarity.cosine(consulta_vector, n.embedding) AS similarity, n.name as name"""
-    with driver.session() as session:
-        result = session.run(query, {
-            "embedding": embedding,
-        })
-        return [{"node": record["name"], "similarity": record["similarity"]} for record in result]
 
 def extract_unique_entities(records: list) -> dict:
     CATEGORY_MAP = {
@@ -57,7 +45,7 @@ def extract_unique_entities(records: list) -> dict:
     }
 
     entities = {v: {} for v in CATEGORY_MAP.values()}
-    relationships_set = set()  # <- Usamos un set para evitar duplicados
+    relationships_set = set() 
     relationships = []
 
     for record in records:
@@ -73,7 +61,7 @@ def extract_unique_entities(records: list) -> dict:
                     if category:
                         if name not in entities[category]:
                             entities[category][name] = {
-                                'description': remove_redundant_text(desc),
+                                'description': desc,
                                 'labels': labels
                             }
 
@@ -95,23 +83,21 @@ def extract_unique_entities(records: list) -> dict:
                     if label in CATEGORY_MAP:
                         alias_map[alias] = label
 
-        for (src_type, tgt_type), rel_type in known_rels.items():
-            for src_alias, src_label in alias_map.items():
-                if src_label == src_type:
-                    for tgt_alias, tgt_label in alias_map.items():
-                        if tgt_label == tgt_type and src_alias != tgt_alias:
-                            src_name = record.get(f"{src_alias}.name")
-                            tgt_name = record.get(f"{tgt_alias}.name")
+        for (src_type, tgt_type), rel_type in known_rels.items(): #problem, context, arisesAt
+            for src_alias, src_label in alias_map.items(): #c, context
+                if src_label == src_type: #c == problem
+                    for tgt_alias, tgt_label in alias_map.items(): #c, context
+                        if tgt_label == tgt_type and src_alias != tgt_alias: #context == context  p1!=c
+                            src_name = record.get(f"{src_alias}.name") #Problema 2
+                            tgt_name = record.get(f"{tgt_alias}.name") #Contexto A
                             if src_name and tgt_name:
-                                rel_key = (src_name, tgt_name, rel_type)
+                                rel_key = (src_name, tgt_name, rel_type) #(Problema 2, Contexto A, arisesAt)
                                 if rel_key not in relationships_set:
                                     relationships_set.add(rel_key)
                                     relationships.append({
-                                        "from": src_name,
-                                        "to": tgt_name,
-                                        "type": rel_type,
-                                        "from_type": src_type,
-                                        "to_type": tgt_type
+                                        "from": src_name, #Problema A
+                                        "to": tgt_name, #Contexto A
+                                        "type": rel_type, #arisesAt
                                     })
 
     return {
@@ -124,7 +110,7 @@ def remove_redundant_text(text: str) -> str:
     unique_parts = list(dict.fromkeys([p.strip() for p in parts if p.strip()]))
     return '; '.join(unique_parts)
 
-def prob():
+async def prob():
     query = """MATCH (p1:problem), (ac:artifactClass), (p2:problem)
     MATCH (p1)-[:addressedBy]->(ac)<-[:addressedBy]-(p2)
     WHERE p1.name IS NOT NULL AND ac.name IS NOT NULL AND p1 <> p2
@@ -132,5 +118,19 @@ def prob():
     RETURN p1.name, p1.description, labels(p1),
         p2.name, p2.description, labels(p2),
         ac.name, ac.description, labels(ac)"""
-    resultados = execute_query(query)
+    resultados = await execute_query(query)
     print(resultados)
+
+
+async def prueba(embedding):
+    driver = await get_driver()
+    query = f"""WITH $embedding AS consulta_vector
+        MATCH (n:stakeholder {{name: "software developers"}})
+        WHERE n.embedding IS NOT NULL
+        RETURN gds.similarity.cosine(consulta_vector, n.embedding) AS similarity, n.name as name"""
+    async with driver.session() as session:
+        result = await session.run(query, {
+            "embedding": embedding,
+        })
+        records = await result.data()
+        return [{"node": record["name"], "similarity": record["similarity"]} for record in records]

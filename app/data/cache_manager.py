@@ -1,42 +1,32 @@
-import aiosqlite
-import json
+from diskcache import Cache
+from llm.llm_client import get_embedding
+from data.database_connector import get_similar_nodes_by_entity
+import os
 
-DB_PATH = "cache.db"
+DB_DIR = "./.cache"
+DB_PATH = os.path.join(DB_DIR, "cache.db")
 
-# EMBEDDING CACHE
-async def get_cached_embedding(entity_type: str, entity_value: str):
-    async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute(
-            "SELECT embedding FROM embedding_cache WHERE entity_type=? AND entity_value=?", 
-            (entity_type, entity_value)
-        )
-        row = await cursor.fetchone()
-        if row:
-            return json.loads(row[0])  # convert back from string
-        return None
+cache = Cache(DB_PATH)
 
-async def cache_embedding(entity_type: str, entity_value: str, embedding: list):
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            "INSERT OR REPLACE INTO embedding_cache (entity_type, entity_value, embedding) VALUES (?, ?, ?)",
-            (entity_type, entity_value, json.dumps(embedding))
-        )
-        await db.commit()
+async def get_embedding_cached(entity_value):
+    result = cache.get(entity_value)
+    if result is not None:
+        print("EMB IN CACHE")
+        return result, 0
+    else:
+        print("GENERATING EMB")
+        emb,cost = await get_embedding(entity_value)
+        cache.set(entity_value,emb,3600*24*7)
+        return emb, cost
 
-# CYPHER QUERY CACHE
-async def get_cached_cypher(question: str):
-    async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute(
-            "SELECT cypher_query FROM cypher_cache WHERE question=?", 
-            (question,)
-        )
-        row = await cursor.fetchone()
-        return row[0] if row else None
-
-async def cache_cypher(question: str, cypher_query: str):
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            "INSERT OR REPLACE INTO cypher_cache (question, cypher_query) VALUES (?, ?)",
-            (question, cypher_query)
-        )
-        await db.commit()
+async def get_similarity_cached(entity_type, entity_value, embedding):
+    key = f"{entity_type}:{entity_value}"
+    result = cache.get(key)
+    if result is not None:
+        print("SIM IN CACHE")
+        return result
+    else:
+        print("GENERATING SIM")
+        nodes = await get_similar_nodes_by_entity(entity_type,embedding)
+        cache.set(key,nodes,3600*24*7)
+        return nodes

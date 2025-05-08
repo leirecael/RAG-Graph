@@ -5,5 +5,7 @@ python-dotenv
 pydantic
 streamlit
 neo4j
-openai-agents
-aiosqlite
+diskcache
+tiktoken
+pytest
+pytest-asyncio
