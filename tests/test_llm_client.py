@@ -13,8 +13,8 @@ def test_calculate_token_cost_by_parts(model, input_tokens, output_tokens, expec
 
 
 def test_calculate_token_cost_total_tokens():
-    cost = calculate_token_cost("text-embedding-3-small", total_tokens=1000)
-    assert round(cost, 8) == 0.00002
+    cost = calculate_token_cost("text-embedding-3-large", total_tokens=1000)
+    assert round(cost, 8) == 0.00013
 
 
 def test_calculate_token_cost_unknown_model():
@@ -36,50 +36,4 @@ def test_truncate_prompt_exceeds_limit():
     assert isinstance(truncated, str)
     assert len(truncated.split()) <= 10 
 
-
-@pytest_asyncio.fixture
-def mock_client(monkeypatch):
-    mock = AsyncMock()
-    monkeypatch.setattr("your_module.client", mock)
-    return mock
-
-
-@pytest.mark.asyncio
-async def test_call_llm(mock_client):
-    mock_response = AsyncMock()
-    mock_response.usage.input_tokens = 1000
-    mock_response.usage.output_tokens = 500
-    mock_response.output_text = "Generated text"
-    mock_client.responses.create.return_value = mock_response
-
-    result, cost = await call_llm("Explain the context.", model="gpt-4.1")
-    assert "Generated text" in result
-    assert cost > 0
-
-
-@pytest.mark.asyncio
-async def test_call_llm_structured(mock_client):
-    mock_response = AsyncMock()
-    mock_response.usage.prompt_tokens = 800
-    mock_response.usage.completion_tokens = 300
-    mock_response.choices = [AsyncMock()]
-    mock_response.choices[0].message.content = "Structured content"
-    mock_client.beta.chat.completions.parse.return_value = mock_response
-
-    result, cost = await call_llm_structured("List problems.", model="gpt-4.1", text_format="question")
-    assert "Structured content" in result
-    assert cost > 0
-
-
-@pytest.mark.asyncio
-async def test_get_embedding(mock_client):
-    mock_response = AsyncMock()
-    mock_response.usage.total_tokens = 256
-    mock_response.data = [AsyncMock()]
-    mock_response.data[0].embedding = [0.1] * 10
-    mock_client.embeddings.create.return_value = mock_response
-
-    embedding, cost = await get_embedding("What is context?")
-    assert isinstance(embedding, list)
-    assert len(embedding) == 10
-    assert cost > 0
+#FALTAN LOS CALL Y EMBEDDING

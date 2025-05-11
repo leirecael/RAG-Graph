@@ -7,7 +7,6 @@ def test_question_model_valid():
         value="What problems do developers face?",
         is_valid=True,
         reasoning=None,
-        is_simple=None
     )
     assert q.is_valid is True
     assert q.reasoning is None

@@ -62,24 +62,10 @@ def test_extract_unique_entities_no_duplicates_in_relationships():
     ]
     result = extract_unique_entities(fake_records)
     rels = result["relationships"]
-    assert len(rels) == 1  # Should not duplicate relationship
+    assert len(rels) == 1 
 
 
-# -------- TESTS FUNCIONALES REALES -------- #
-
-@pytest.mark.asyncio
-async def test_get_similar_nodes_by_entity():
-    dummy_embedding = [0.01] * 1536  # Suponiendo un embedding válido de 1536 dims
-    result = await get_similar_nodes_by_entity("problem", dummy_embedding, threshold=0.0, top_k=3)
-
-    assert isinstance(result, list)
-    assert len(result) <= 3
-    for name in result:
-        assert isinstance(name, str)
-
-
-@pytest.mark.asyncio
-async def test_execute_query_structure():
+def test_execute_query_structure():
     query = """
     MATCH (p1:problem), (c:context), (p2:problem)
     MATCH (p1)-[:arisesAt]->(c)<-[:arisesAt]-(p2)
@@ -89,9 +75,12 @@ async def test_execute_query_structure():
            p2.name, p2.description, labels(p2),
            c.name, c.description, labels(c)
     """
-    result = await execute_query(query)
+    result = execute_query(query)
 
     assert "entities" in result
     assert "relationships" in result
     assert isinstance(result["entities"], dict)
     assert isinstance(result["relationships"], list)
+
+
+#FALTA EL DE APOC Y EL DE CREAR LISTA DE QUERIES

@@ -13,7 +13,6 @@ class EntityEnum(str, Enum):
 class Entity(BaseModel):
     value: Optional[str]
     type: EntityEnum
-    primary: bool
     embedding: Optional[list[float]]
 
     class Config:  

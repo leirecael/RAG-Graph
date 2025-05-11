@@ -8,7 +8,8 @@ def test_enrich_prompt_basic_structure():
             "problems": {
                 "Latency Issue": {
                     "description": "The response time is too high.",
-                    "labels": ["problem"]
+                    "labels": ["problem"],
+                    "hypernym": "connection issues"
                 }
             },
             "stakeholders": {}
@@ -22,13 +23,13 @@ def test_enrich_prompt_basic_structure():
         ]
     }
 
-    prompt = enrich_prompt(question, context)
+    prompt, _ = enrich_prompt(question, context)
 
     assert "### QUESTION" in prompt
     assert question in prompt
     assert "### ENTITIES" in prompt
     assert "### PROBLEMS" in prompt
-    assert "**Latency Issue**" in prompt
+    assert "**Latency Issue(connection issues)**" in prompt
     assert "The response time is too high." in prompt
     assert "[problem]" in prompt
     assert "### RELATIONSHIPS" in prompt
@@ -45,12 +46,11 @@ def test_enrich_prompt_empty_entities():
         "relationships": []
     }
 
-    prompt = enrich_prompt(question, context)
+    prompt, _ = enrich_prompt(question, context)
 
     assert "### ENTITIES" in prompt
     assert "### RELATIONSHIPS" in prompt
     assert "Is there a problem?" in prompt
-    # Should not contain any node lines
     assert "- **" not in prompt
 
 
@@ -61,19 +61,22 @@ def test_enrich_prompt_multiple_entities_and_relationships():
             "problems": {
                 "Data Loss": {
                     "description": "Loss of critical information.",
-                    "labels": ["problem"]
+                    "labels": ["problem"],
+                    "hypernym": "problem hyper"
                 }
             },
             "goals": {
                 "Data Integrity": {
                     "description": "Ensure no data is lost.",
-                    "labels": ["goal"]
+                    "labels": ["goal"],
+                    "hypernym": "goal hyper"
                 }
             },
             "contexts": {
                 "Context A": {
                     "description": "Specific operational setting.",
-                    "labels": ["context"]
+                    "labels": ["context"],
+                    "hypernym": "context hyper"
                 }
             }
         },
@@ -83,9 +86,11 @@ def test_enrich_prompt_multiple_entities_and_relationships():
         ]
     }
 
-    prompt = enrich_prompt(question, context)
+    prompt, _ = enrich_prompt(question, context)
 
     assert "### GOALS" in prompt
+    assert "### PROBLEMS" in prompt
+    assert "context hyper" in prompt
     assert "Data Integrity" in prompt
     assert "### CONTEXTS" in prompt
     assert "Context A" in prompt

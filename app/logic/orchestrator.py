@@ -1,189 +1,181 @@
 from logic.validator import validate_question
-from data.database_connector import get_similar_nodes_by_entity, execute_query
+from data.database_connector import execute_query, generate_similarity_queries, execute_multiple_queries_with_apoc
 from llm.llm_client import get_embedding, call_llm
-from logic.question_processor import extract_entities, determine_simplicity
-from logic.cypher_generator import build_cypher_query, create_cypher_query
+from logic.question_processor import extract_entities
+from logic.cypher_generator import create_cypher_query
 from logic.prompt_enricher import enrich_prompt
-from data.logger import log_query, log_error
-from data.cache_manager import get_embedding_cached, get_similarity_cached
+from data.logger import log_data, log_error
 import json
 import time
+from datetime import datetime
 from models.entity import EntityList, Entity
 from models.question import Question
 import asyncio
 
 async def process_question(userQuestion):
     start = time.time()
-    cost_gpt = cost_embed = 0
+    total_cost = 0
+
+
     try:
-        try:
-            validation, cost =  await validate_question(userQuestion)
-            question = Question.model_validate(json.loads(validation))
-            if not question.is_valid:
-                log_error("InvalidQuestion", {
-                    "question": question.value,
-                    "reason": question.reasoning, 
-                    "total_cost": cost_gpt + cost_embed
-                })
-                return f"Your question is not valid. Reason: {question.reasoning}"
-        
-        except Exception as e:
-            log_error("ValidationError", {
-                    "question": userQuestion,
-                    "error": str(e), 
-                    "total_cost": cost_gpt + cost_embed
-                })
-            return f"ValidationError: {str(e)}"
-        print("VALIDATION COMPLETE")
-        cost_gpt += cost
-        
-        try:
-            entities, cost = await extract_entities(question.value)
-            extracted_entities = EntityList.model_validate(json.loads(entities))
-            
-        except Exception as e:
-            log_error("EntityExtractionError", {
-                    "question": question.value,
-                    "error": str(e), 
-                    "total_cost": cost_gpt + cost_embed
-                })
-            return f"EntityExtractionError: {str(e)}"
-        print("EXTRACTION COMPLETE")
-        cost_gpt += cost
-        
-        try:
-            entities_with_value = [e for e in extracted_entities.entities if not e.value is None]
-            
-            embedding_results = await asyncio.gather(*(get_embedding(e.value) for e in entities_with_value))
-
-            for entity, (embedding, cost) in zip(entities_with_value, embedding_results):
-                entity.embedding = embedding
-                cost_embed += cost
-        except Exception as e:
-                log_error("EmbeddingError", {
-                    "error": str(e), 
-                    "total_cost": cost_gpt + cost_embed
-                })
-                return f"EmbeddingError: {str(e)}"
-        print("EMBEDDINGS COMPLETE")
-        try:
-            similarity_tasks = [
-                get_similar_nodes_by_entity(entity.type, entity.embedding)
-                for entity in entities_with_value
-            ]
-            similarity_results = await asyncio.gather(*similarity_tasks)
-        except Exception as e:
-                log_error("SimilarityError", {
-                    "entity": entity.value,
-                    "entity_type": entity.type,
-                    "error": str(e), 
-                    "total_cost": cost_gpt + cost_embed
-                })
-                return f"SimilarityError: {str(e)}"
-
-        print("SIMILARITY COMPLETE")
-
-        all_relevant_nodes = {} 
-        entities_with_no_value = [e for e in extracted_entities.entities if e.value is None]
-        for entity, result in zip(entities_with_value, similarity_results):
-            all_relevant_nodes[entity.type] = {"result":result, "primary":entity.primary}
-        for entity in entities_with_no_value:
-            all_relevant_nodes[entity.type] = {"result": None, "primary":entity.primary}
-        print(all_relevant_nodes)
-        print("STRUCTURING COMPLETE")
-        try:
-            question.is_simple, cost = await determine_simplicity(question.value)
-        except Exception as e:
-            log_error("SimplicityError", {
-                    "question": question.value,
-                    "error": str(e), 
-                    "total_cost": cost_gpt + cost_embed
-                })
-            return f"SimplicityError: {str(e)}"
-        print("SIMPLICITY COMPLETE")
-        cost_gpt += cost
-
-        try:
-            if question.is_simple:
-                cypher_query = build_cypher_query(all_relevant_nodes)
-                print(cypher_query)
-            else:
-                cypher_query, cost = await create_cypher_query(question.value, all_relevant_nodes)
-        except Exception as e:
-                log_error("CypherGenerationError", {
-                    "nodes": all_relevant_nodes,
-                    "error": str(e), 
-                    "total_cost": cost_gpt + cost_embed
-                })
-                return f"CypherGenerationError: {str(e)}"
-        cost_gpt += cost
-        print("CYPHER COMPLETE")
-        try:
-            related_nodes = await execute_query(cypher_query)
-        except Exception as e:
-            log_error("DatabaseQueryError", {
-                "query": cypher_query,
-                "error": str(e), 
-                "total_cost": cost_gpt + cost_embed
-            })
-            return f"DatabaseQueryError: {str(e)}"
-        
-        print("RELATED COMPLETE")
-        if not related_nodes:
-            log_error("RelatedNodesNotFoundError", {
-                        "query": cypher_query,
-                        "nodes": all_relevant_nodes, 
-                        "total_cost": cost_gpt + cost_embed
-                    })
-            return "No available information. Please, reword your question or try another one."
-        try:
-            final_prompt = enrich_prompt(question.value,related_nodes)
-            
-        except Exception as e:
-            log_error("EnrichmentError", {
+        validation, cost =  await validate_question(userQuestion)
+        question = Question.model_validate(json.loads(validation))
+        if not question.is_valid:
+            log_error("InvalidQuestion", {
                 "question": question.value,
-                "nodes": related_nodes,
-                "error": str(e), 
-                "total_cost": cost_gpt + cost_embed
+                "reason": question.reasoning, 
             })
-            return f"EnrichmentError: {str(e)}"
-        print("ENRICHING COMPLETE")
-
-        try:
-            final_answer, cost = await call_llm(final_prompt)
-        except Exception as e:
-            log_error("ResponseGenerationError", {
-                "prompt": final_prompt,
-                "error": str(e), 
-                "total_cost": cost_gpt + cost_embed
-            })
-            return f"ResponseGenerationError: {str(e)}"
-        cost_gpt+= cost
-        print("RESPONSE COMPLETE")
-        end = time.time()
-        elapsed_time = end-start
-
-        log_query({"question": question.value,
-            "entities": entities,
-            "simple_question": question.is_simple,
-            "cypher_query": cypher_query,
-            "prompt": final_prompt,
-            "llm_response": final_answer,
-            "time_elapsed": elapsed_time,
-            "cost_gpt": cost_gpt,
-            "cost_embed": cost_embed,
-            "total_cost": cost_gpt + cost_embed
-        })
-
-
-        return final_answer
+            return f"Your question is not valid. Reason: {question.reasoning}"
+    
     except Exception as e:
-        log_error("UnhandledException", {
-            "question": userQuestion,
-            "error": str(e), 
-            "total_cost": cost_gpt + cost_embed
-        })
-        return "An unexpected error occurred while processing your question."
+        log_error("ValidationError", {
+                "question": userQuestion,
+                "error": str(e), 
+            })
+        raise
+    total_cost +=cost
+    
+    try:
+        entities, cost = await extract_entities(question.value)
+        extracted_entities = EntityList.model_validate(json.loads(entities))
+        
+    except Exception as e:
+        log_error("EntityExtractionError", {
+                "question": question.value,
+                "error": str(e), 
+            })
+        raise
+    total_cost +=cost
+    
+    try:
+        entities_with_value = [e for e in extracted_entities.entities if not e.value is None]
+        
+        embedding_results = await asyncio.gather(*(get_embedding(e.value, task_name="embed_entity") for e in entities_with_value))
 
-#how to address the lack of flexibility to enchance model variants comparison that happens in EMF-based model variants?
+        for entity, (embedding, cost) in zip(entities_with_value, embedding_results):
+            entity.embedding = embedding
+            total_cost +=cost
+    except Exception as e:
+            log_error("EmbeddingError", {
+                "question": question.value,
+                "error": str(e), 
+            })
+            raise
+    try:
+        
+        if entities_with_value:
+            start_sim = time.time()
+            queries = generate_similarity_queries(entities_with_value)
+            similarity_results = execute_multiple_queries_with_apoc(queries)
+            end_sim = time.time()
+            log_data({
+                "timestamp": datetime.now().isoformat(),
+                "log_type": "database",
+                "task_name": "similarity_calculation",
+                "user_prompt": question.value,
+                "final_response": similarity_results,
+                "log_duration_sec": end_sim-start_sim,
+            })
+    except Exception as e:
+            log_error("SimilarityError", {
+                "question": question.value,
+                "entity": entity.value,
+                "entity_type": entity.type,
+                "error": str(e), 
+            })
+            raise
+
+
+    all_relevant_nodes = {} 
+    entities_with_no_value = [e for e in extracted_entities.entities if e.value is None]
+    for entity in entities_with_value:
+        entity_type = entity.type
+        if entity_type in similarity_results:
+            all_relevant_nodes[entity_type] = similarity_results[entity_type]
+        else:
+            log_error("SimilarityError", {
+                "question": question.value,
+                "entity": entity.value,
+                "entity_type": entity_type,
+            })
+            return f"No data found about {entity}."
+    for entity in entities_with_no_value:
+        all_relevant_nodes[entity.type] = None
+    try:
+        cypher_query, cost = await create_cypher_query(question.value, all_relevant_nodes)
+    except Exception as e:
+            log_error("CypherGenerationError", {
+                "question": question.value,
+                "nodes": all_relevant_nodes,
+                "error": str(e), 
+            })
+            raise
+    total_cost +=cost
+
+    try:
+        start_db = time.time()
+        related_nodes = execute_query(cypher_query)
+        end_db = time.time()
+        log_data({
+            "timestamp": datetime.now().isoformat(),
+            "log_type": "database",
+            "task_name": "cypher_execution",
+            "user_prompt": question.value,
+            "final_response": cypher_query,
+            "log_duration_sec": end_db-start_db,
+        })
+    except Exception as e:
+        log_error("DatabaseQueryError", {
+            "question": question.value,
+            "query": cypher_query,
+            "error": str(e), 
+        })
+        raise
+    
+
+    if len(related_nodes["entities"]) == 0:
+        log_error("RelatedNodesNotFoundError", {
+                    "question": question.value,
+                    "query": cypher_query,
+                    "nodes": all_relevant_nodes, 
+                })
+        return "No available information. Please, reword your question or try another one."
+    try:
+        final_prompt, system_prompt = enrich_prompt(question.value,related_nodes)
+        
+    except Exception as e:
+        log_error("EnrichmentError", {
+            "question": question.value,
+            "nodes": related_nodes,
+            "error": str(e), 
+        })
+        raise
+
+
+    try:
+        final_answer, cost = await call_llm(final_prompt, system_prompt,task_name="rag_answer_generation")
+    except Exception as e:
+        log_error("ResponseGenerationError", {
+            "question": question.value,
+            "prompt": final_prompt,
+            "error": str(e), 
+        })
+        raise
+    total_cost +=cost
+
+    end = time.time()
+    elapsed_time = end-start
+    log_data({
+        "timestamp": datetime.now().isoformat(),
+        "log_type": "register_query",
+        "user_prompt": question.value,
+        "final_response": final_answer,
+        "log_duration_sec": elapsed_time,
+        "cost": total_cost
+    })
+
+    return final_answer
+
+
+#how to address the lack of flexibility in model variants to enchance model variants comparison that happens in EMF-based model variants?
 #what problems do software developers have?

@@ -15,3 +15,5 @@ async def test_create_cypher_query_real_call():
     assert "MATCH" in query
     assert "RETURN" in query
     assert cost > 0
+
+#MAS

@@ -1,42 +1,22 @@
-from llm.llm_client import call_llm_structured, call_llm
-import json
-
-async def determine_simplicity(question: str) -> bool:
-    prompt = f"""
-        Your task is to classify the following question as **simple** or **complex** in the context of generating a Cypher query.
-
-        ### Criteria:
-        - **Simple**: only one instance per entity type is required (multiple types allowed).
-        - **Complex**: the question requires multiple instances of the same entity type.
-
-        Respond **only** in JSON format: {{"is_simple": true}}
-
-        Examples:
-        - What problems do developers face? → true  
-        - What problems affect the same context? → false  
-        - What goals are related to requirement R1? → true  
-        - What requirements are linked to different problems in the same context? → false
-
-        Question: {question}
-    """
-
-    response, cost = await call_llm(prompt)
-    simplicity = json.loads(response)   
-    return simplicity["is_simple"], cost
+from llm.llm_client import call_llm_structured
 
 async def extract_entities(question: str) -> dict:
+
+    system_prompt = "You are an expert entity extractor for scientific knowledge graphs. Extract only entities that are clearly present or directly implied. Do not invent entities."
+
     prompt = f"""
-        Extract relevant entities from the question. Mark with `primary=true` those that represent what the user wants to know (only one primary per entity type). If an entity is not clearly stated or inferred, do not include it.
+        # TASK
+        Extract relevant entities from the question. You must understand the user's intention. Understand which entities will give the user the answer they want.
 
-        Entity types:
-        - problem: a deficiency or issue
-        - stakeholder: a person or group affected or interested
-        - goal: desired high-level outcome (e.g. improvements)
-        - context: environment or situation
-        - requirement: functionality or condition the system must meet
-        - artifactClass: general category of solution
-
-        Relationships (Cypher):
+        # ENTITY TYPES
+        - problem: a deficiency or issue (e.g. lack of traceability)
+        - stakeholder: person or group affected (e.g. developers)
+        - goal: desired high-level outcome (e.g. improve maintainability)
+        - context: domain or situation (e.g. safety-critical systems)
+        - requirement: system-level functionality or need
+        - artifactClass: type of technical solution to a problem (e.g. feature model)
+        
+        # RELATIONSHIPS
         - (problem)-[:arisesAt]->(context)
         - (problem)-[:concerns]->(stakeholder)
         - (problem)-[:informs]->(goal)
@@ -44,35 +24,24 @@ async def extract_entities(question: str) -> dict:
         - (problem)-[:addressedBy]->(artifactClass)
         - (goal)-[:achievedBy]->(requirement)
 
-        Format: list of objects with `value`, `type`, `primary`, and `embedding=null`.
+        # FORMAT
+        List of JSON objects with: value, type, embedding (always null)
 
-        Example:
+        # POSITIVE EXAMPLES
         Question: What problems do developers face?
-        →
-        [
-            {{ "value": "developers", "type": "stakeholder", "primary": false, "embedding": null }},
-            {{ "value": null, "type": "problem", "primary": true, "embedding": null }}
-        ]
+        [{{"value": "developers", "type": "stakeholder", "embedding": null}}, {{"value": null, "type": "problem", "embedding": null}}]
+        Question: How can we fix the problem of climate change?
+        [{{"value": "climate change", "type": "problem", "embedding": null}}, {{"value": null, "type": "artifactClass", "embedding": null}}]
+        Question: What problems are solved by the same artifact?
+        [{{"value": null, "type": "problem", "embedding": null}}, {{"value": null, "type": "artifactClass", "embedding": null}}]
 
-        Question: How to address X problem in Y?
-        →
-        [
-            {{ "value": "X", "type": "problem", "primary": false, "embedding": null }},
-            {{ "value": Y, "type": "context", "primary": false, "embedding": null }},
-            {{ "value": null, "type": "artifactClass", "primary": true, "embedding": null }}
-        ]
+        # NEGATIVE EXAMPLE
+        Question: What's the weather today?
+        []
 
-        Question: What is goal X and its requirements?
-        →
-        [
-            {{ "value": "X", "type": "goal", "primary": true, "embedding": null }},
-            {{ "value": null, "type": "requirement", "primary": true, "embedding": null }}
-        ]
-
-        Question: {question}
+        # QUESTION
+        {question}
     """
 
-    response, cost = await call_llm_structured(prompt, text_format="entitylist")
-    
-
+    response, cost = await call_llm_structured(prompt, system_prompt, text_format="entitylist", task_name="entity_extraction") 
     return response, cost
