@@ -5,7 +5,6 @@ python-dotenv
 pydantic
 streamlit
 neo4j
-diskcache
 tiktoken
 pytest
 pytest-asyncio
