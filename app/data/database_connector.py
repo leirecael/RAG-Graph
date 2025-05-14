@@ -67,28 +67,6 @@ def group_similarity_results_by_label(results: list[dict]) -> dict[str, list[str
 
     return grouped
 
-# async def get_similar_nodes_by_entity(entity: str, embedding: list[float], threshold: float = 0.5, top_k: int = 3):
-#     query = f"""
-#     WITH $embedding AS embedding
-#     MATCH (n:{entity})
-#     WHERE n.embedding IS NOT NULL
-#     WITH n, gds.similarity.cosine(embedding, n.embedding) AS similarity
-#     WHERE similarity >= $threshold
-#     RETURN DISTINCT n.name as name, similarity
-#     ORDER BY similarity DESC
-#     LIMIT $top_k
-#     """
-#     driver = await get_driver()
-#     async with driver.session() as session:
-#         result = await session.run(query, {
-#             "embedding": embedding,
-#             "threshold": threshold,
-#             "top_k": top_k
-#         })
-#         records = await result.values()
-#         return [{"name":name, "similarity": similarity} for name, similarity in records]#return [record["name"] for record in records]
-
-
 def execute_query(cypher_query: str, parameters: dict = None):
     driver = get_driver()
     with driver.session() as session:
@@ -107,17 +85,28 @@ def extract_unique_entities(records: list) -> dict:
     }
 
     entities = {v: {} for v in CATEGORY_MAP.values()}
-    relationships_set = set() 
+    relationships_set = set()
     relationships = []
+    others = {}
 
     for record in records:
         for key, value in record.items():
+            if '.' not in key and "labels" not in key:
+                if isinstance(value, list):
+                    others[key] = remove_redundant_text_in_list(value)
+                elif isinstance(value, str):
+                    others[key] = remove_redundant_text(value)
+                else:
+                    others[key] = value
+                continue
+
             if key.endswith('.name'):
                 alias = key.split('.')[0]
                 name = value
                 desc = record.get(f"{alias}.description", "")
                 labels = record.get(f"labels({alias})", [])
                 hyper = record.get(f"{alias}.hypernym", "")
+                alt_name = record.get(f"{alias}.alternativeName", "")
 
                 for label in labels:
                     category = CATEGORY_MAP.get(label)
@@ -128,7 +117,10 @@ def extract_unique_entities(records: list) -> dict:
                                 'labels': labels,
                                 'hypernym': remove_redundant_text(hyper)
                             }
+                            if alt_name:
+                                entities[category][name]['alternativeName'] = remove_redundant_text(alt_name)
 
+        # Relationships
         known_rels = {
             ('problem', 'context'): 'arisesAt',
             ('problem', 'stakeholder'): 'concerns',
@@ -147,31 +139,61 @@ def extract_unique_entities(records: list) -> dict:
                     if label in CATEGORY_MAP:
                         alias_map[alias] = label
 
-        for (src_type, tgt_type), rel_type in known_rels.items(): #problem, context, arisesAt
-            for src_alias, src_label in alias_map.items(): #c, context
-                if src_label == src_type: #c == problem
-                    for tgt_alias, tgt_label in alias_map.items(): #c, context
-                        if tgt_label == tgt_type and src_alias != tgt_alias: #context == context  p1!=c
-                            src_name = record.get(f"{src_alias}.name") #Problema 2
-                            tgt_name = record.get(f"{tgt_alias}.name") #Contexto A
+        for (src_type, tgt_type), rel_type in known_rels.items():
+            for src_alias, src_label in alias_map.items():
+                if src_label == src_type:
+                    for tgt_alias, tgt_label in alias_map.items():
+                        if tgt_label == tgt_type and src_alias != tgt_alias:
+                            src_name = record.get(f"{src_alias}.name")
+                            tgt_name = record.get(f"{tgt_alias}.name")
                             if src_name and tgt_name:
-                                rel_key = (src_name, tgt_name, rel_type) #(Problema 2, Contexto A, arisesAt)
+                                rel_key = (src_name, tgt_name, rel_type)
                                 if rel_key not in relationships_set:
                                     relationships_set.add(rel_key)
                                     relationships.append({
-                                        "from": src_name, #Problema A
-                                        "to": tgt_name, #Contexto A
-                                        "type": rel_type, #arisesAt
+                                        "from": src_name,
+                                        "to": tgt_name,
+                                        "type": rel_type,
                                     })
 
     return {
         "entities": entities,
-        "relationships": relationships
+        "relationships": relationships,
+        "others": others
     }
+
 
 def remove_redundant_text(text: str) -> str:
     seen = set()
     result = []
+
+    for part in text.split(';'):
+        cleaned = part.strip()
+        key = cleaned.lower()
+        if key and key not in seen:
+            seen.add(key)
+            result.append(cleaned)
+
+    return '; '.join(result)
+
+
+def remove_redundant_text_in_list(items: list) -> list:
+    seen = set()
+    result = []
+
+    for item in items:
+        cleaned_text = remove_redundant_text(str(item)).strip()
+        key = cleaned_text.lower()
+        if key and key not in seen:
+            seen.add(key)
+            result.append(cleaned_text)
+
+    return result
+
+def remove_redundant_text(text: str) -> str:
+    seen = set()
+    result = []
+
     for part in text.split(';'):
         cleaned = part.strip()
         key = cleaned.lower()
@@ -179,6 +201,19 @@ def remove_redundant_text(text: str) -> str:
             seen.add(key)
             result.append(cleaned)
     return '; '.join(result)
+
+
+def remove_redundant_text_in_list(items: list) -> list:
+    seen = set()
+    result = []
+
+    for item in items:
+        cleaned_text = remove_redundant_text(str(item)).strip()
+        key = cleaned_text.lower()
+        if key and key not in seen:
+            seen.add(key)
+            result.append(cleaned_text)
+    return result
 # async def prob():
 #     query = """MATCH (p1:problem), (ac:artifactClass), (p2:problem)
 #     MATCH (p1)-[:addressedBy]->(ac)<-[:addressedBy]-(p2)
@@ -203,3 +238,24 @@ def remove_redundant_text(text: str) -> str:
 #         })
 #         records = await result.data()
 #         return [{"node": record["name"], "similarity": record["similarity"]} for record in records]
+
+# async def get_similar_nodes_by_entity(entity: str, embedding: list[float], threshold: float = 0.5, top_k: int = 3):
+#     query = f"""
+#     WITH $embedding AS embedding
+#     MATCH (n:{entity})
+#     WHERE n.embedding IS NOT NULL
+#     WITH n, gds.similarity.cosine(embedding, n.embedding) AS similarity
+#     WHERE similarity >= $threshold
+#     RETURN DISTINCT n.name as name, similarity
+#     ORDER BY similarity DESC
+#     LIMIT $top_k
+#     """
+#     driver = await get_driver()
+#     async with driver.session() as session:
+#         result = await session.run(query, {
+#             "embedding": embedding,
+#             "threshold": threshold,
+#             "top_k": top_k
+#         })
+#         records = await result.values()
+#         return [{"name":name, "similarity": similarity} for name, similarity in records]#return [record["name"] for record in records]

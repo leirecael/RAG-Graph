@@ -93,12 +93,12 @@ async def process_question(userQuestion):
         if entity_type in similarity_results:
             all_relevant_nodes[entity_type] = similarity_results[entity_type]
         else:
-            log_error("SimilarityError", {
+            log_error("SimilarNotFoundError", {
                 "question": question.value,
                 "entity": entity.value,
                 "entity_type": entity_type,
             })
-            return f"No data found about {entity}."
+            return f"No data found about {entity.value}."
     for entity in entities_with_no_value:
         all_relevant_nodes[entity.type] = None
     try:
@@ -133,7 +133,7 @@ async def process_question(userQuestion):
         raise
     
 
-    if len(related_nodes["entities"]) == 0:
+    if len(related_nodes["entities"]) == 0 and len(related_nodes["relationships"]) == 0 and len(related_nodes["others"]) == 0:
         log_error("RelatedNodesNotFoundError", {
                     "question": question.value,
                     "query": cypher_query,

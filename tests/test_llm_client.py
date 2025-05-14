@@ -1,6 +1,5 @@
 import pytest
 import pytest_asyncio
-from unittest.mock import AsyncMock
 from app.llm.llm_client import *
 
 @pytest.mark.parametrize("model,input_tokens,output_tokens,expected_cost", [
@@ -35,5 +34,6 @@ def test_truncate_prompt_exceeds_limit():
     truncated = truncate_prompt(long_prompt, encoding, max_tokens=10)
     assert isinstance(truncated, str)
     assert len(truncated.split()) <= 10 
+    assert len(truncated.strip()) > 0
 
 #FALTAN LOS CALL Y EMBEDDING

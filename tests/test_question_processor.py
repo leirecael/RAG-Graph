@@ -20,7 +20,7 @@ async def test_extract_entities_basic():
 @pytest.mark.asyncio
 async def test_extract_entities_complex():
     question = "How to address problem X in context Y?"
-    response, cost = await extract_entities(question)
+    response, _ = await extract_entities(question)
 
     response_dict = json.loads(response)
     response_obj = EntityList.model_validate(response_dict)
@@ -30,3 +30,24 @@ async def test_extract_entities_complex():
     assert "problem" in types
     assert "context" in types
     assert "artifactClass" in types
+
+@pytest.mark.asyncio
+async def test_extract_entities_none():
+    question = "What's the weather today?"
+    response, _ = await extract_entities(question)
+
+    response_dict = json.loads(response)
+    response_obj = EntityList.model_validate(response_dict)
+
+    assert response_obj.entities == []
+
+@pytest.mark.asyncio
+async def test_extract_entities_with_null_values():
+    question = "What problems are solved by the same artifact?"
+    response, _ = await extract_entities(question)
+
+    response_dict = json.loads(response)
+    response_obj = EntityList.model_validate(response_dict)
+
+    problem_entries = [e for e in response_obj.entities if e.type == "problem"]
+    assert (e.value is None for e in problem_entries)

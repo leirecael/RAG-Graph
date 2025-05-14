@@ -28,3 +28,12 @@ async def test_validate_question_positive():
     assert response_obj.is_valid is True
     assert response_obj.reasoning is None
     assert isinstance(cost, float)
+
+@pytest.mark.asyncio
+async def test_validate_question_spelling_correction():
+    question = "Hw cn featre modelz help?"
+    response, _ = await validate_question(question)
+
+    response_obj = Question.model_validate(json.loads(response))
+    assert response_obj.is_valid is True
+    assert response_obj.value != question 

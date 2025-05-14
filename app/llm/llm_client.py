@@ -28,6 +28,8 @@ RESPONSE_FORMAT = {
 
 async def call_llm(user_prompt, system_prompt, model="gpt-4.1", temperature=0.7, task_name = None):
     start_time = time.time()
+    if model not in MODEL_INFO:
+        raise ValueError(f"Unknown model: {model}")
     max_tokens= MODEL_INFO[model]["max_context"] - MODEL_INFO[model]["max_output"]
     truncated_prompt = truncate_prompt(user_prompt, MODEL_INFO[model]["encoding"], max_tokens)
     response = await client.responses.create(
@@ -62,6 +64,8 @@ async def call_llm(user_prompt, system_prompt, model="gpt-4.1", temperature=0.7,
 
 async def call_llm_structured(user_prompt, system_prompt, model="gpt-4.1", temperature=0.7, text_format=None, task_name = None):
     start_time = time.time()
+    if model not in MODEL_INFO:
+        raise ValueError(f"Unknown model: {model}")
     max_tokens= MODEL_INFO[model]["max_context"] - MODEL_INFO[model]["max_output"]
     truncated_prompt = truncate_prompt(user_prompt, MODEL_INFO[model]["encoding"], max_tokens)
     response = await client.beta.chat.completions.parse(
@@ -99,6 +103,8 @@ async def call_llm_structured(user_prompt, system_prompt, model="gpt-4.1", tempe
 
 async def get_embedding(text, model="text-embedding-3-large", task_name = None):
     start_time = time.time()
+    if model not in MODEL_INFO:
+        raise ValueError(f"Unknown model: {model}")
     response = await client.embeddings.create(
         model=model,
         input=text
@@ -123,10 +129,14 @@ def calculate_token_cost(model, input_tokens=0, output_tokens=0, total_tokens=0)
         raise ValueError(f"Unknown model pricing for: {model}")
     pricing = MODEL_INFO[model]
     if total_tokens > 0:
+        if isinstance(pricing, dict):
+            raise ValueError("This model requires separate input/output tokens.")
         return (total_tokens / 1000) * pricing
-    return (input_tokens / 1000) * pricing["input_price"] + (output_tokens / 1000) * pricing["output_price"]
+    if "input_price" in pricing and "output_price" in pricing:
+        return (input_tokens / 1000) * pricing["input_price"] + (output_tokens / 1000) * pricing["output_price"]
+    raise ValueError("Missing token values or unsupported model.")
 
-def truncate_prompt(prompt,model, max_tokens):
+def truncate_prompt(prompt,model, max_tokens) -> str:
     encodig = tiktoken.get_encoding(model)
     tokens = encodig.encode(prompt)
     if len(tokens)<max_tokens:

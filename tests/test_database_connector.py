@@ -82,5 +82,109 @@ def test_execute_query_structure():
     assert isinstance(result["entities"], dict)
     assert isinstance(result["relationships"], list)
 
+def test_extract_entities_with_missing_fields():
+    fake_records = [
+        {
+            "p.name": "Problem A",
+            "labels(p)": ["problem"],
+        }
+    ]
+    result = extract_unique_entities(fake_records)
 
-#FALTA EL DE APOC Y EL DE CREAR LISTA DE QUERIES
+    assert "Problem A" in result["entities"]["problems"]
+    entity = result["entities"]["problems"]["Problem A"]
+    assert entity["description"] == ""
+    assert entity["hypernym"] == ""
+
+def test_extract_entities_with_multiple_labels():
+    fake_records = [
+        {
+            "x.name": "Hybrid Node",
+            "x.description": "Multiple meanings",
+            "labels(x)": ["problem", "goal"]
+        }
+    ]
+    result = extract_unique_entities(fake_records)
+
+    assert "Hybrid Node" in result["entities"]["problems"] or "Hybrid Node" in result["entities"]["goals"]
+
+def test_remove_redundant_text_normalization():
+    text = "Improves efficiency; improves efficiency ;   Security ; security ;"
+    cleaned = remove_redundant_text(text)
+    assert cleaned == "Improves efficiency; Security"
+
+def test_execute_query_invalid_cypher():
+    with pytest.raises(Exception):
+        execute_query("THIS IS NOT CYPHER")
+
+def test_execute_multiple_queries_with_apoc_real_case():
+    queries = [{
+        "query": "MATCH (n:problem) RETURN n.name as name, labels(n) as labels",
+        "params": {}
+    }]
+    result = execute_multiple_queries_with_apoc(queries)
+    assert isinstance(result, dict)
+
+def test_extract_unique_entities_handles_others():
+    fake_records = [
+        {
+            "source": "User input",
+            "stakeholderList": [
+                "developers",
+                "software engineers",
+                "developers",
+                "Software Engineers"
+            ],
+            "labels(x)": ["unknown"]
+        }
+    ]
+    result = extract_unique_entities(fake_records)
+
+    assert "others" in result
+    assert isinstance(result["others"], dict)
+    assert "stakeholderList" in result["others"]
+    deduped = result["others"]["stakeholderList"]
+
+    # Expect deduped list, case-insensitive
+    assert sorted(deduped) == sorted(["developers", "software engineers"])
+
+def test_remove_redundant_text_in_list_deduplicates_case_insensitive():
+    input_data = ["Security", "security", "SECURITY", "Efficiency", "efficiency "]
+    cleaned = remove_redundant_text_in_list(input_data)
+    assert cleaned == ["Security", "Efficiency"]
+
+def test_extract_unique_entities_basic_case():
+    fake_records = [
+        {
+            "p1.name": "Problem A",
+            "p1.description": "A description of Problem A",
+            "labels(p1)": ["problem"],
+            "p2.name": "Problem B",
+            "p2.description": "Another problem",
+            "labels(p2)": ["problem"],
+            "c.name": "Context X",
+            "c.description": "The environment",
+            "labels(c)": ["context"],
+            "source": "User Feedback"
+        }
+    ]
+
+    result = extract_unique_entities(fake_records)
+
+    assert "problems" in result["entities"]
+    assert "contexts" in result["entities"]
+    assert "others" in result
+    assert result["others"].get("source") == "User Feedback"
+
+def test_extract_unique_entities_others_with_semicolon_lists():
+    fake_records = [
+        {
+            "note": ["Security ; performance ; security", " Usability ; usability "]
+        }
+    ]
+    result = extract_unique_entities(fake_records)
+
+    assert "others" in result
+    values = result["others"]["note"]
+
+    assert values == ["Security; performance", "Usability"]

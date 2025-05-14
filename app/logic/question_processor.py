@@ -6,7 +6,7 @@ async def extract_entities(question: str) -> dict:
 
     prompt = f"""
         # TASK
-        Extract relevant entities from the question. You must understand the user's intention. Understand which entities will give the user the answer they want.
+        Extract relevant entities from the question. You must understand the user's intention. Understand which entities will give the user the answer they want. 
 
         # ENTITY TYPES
         - problem: a deficiency or issue (e.g. lack of traceability)
@@ -25,7 +25,7 @@ async def extract_entities(question: str) -> dict:
         - (goal)-[:achievedBy]->(requirement)
 
         # FORMAT
-        List of JSON objects with: value, type, embedding (always null)
+        List of JSON objects with: value, type, embedding (always null). value and type can never be the same (e.g. {{"value": "stakeholders", "type": "stakeholder", "embedding": null}})
 
         # POSITIVE EXAMPLES
         Question: What problems do developers face?
@@ -34,6 +34,8 @@ async def extract_entities(question: str) -> dict:
         [{{"value": "climate change", "type": "problem", "embedding": null}}, {{"value": null, "type": "artifactClass", "embedding": null}}]
         Question: What problems are solved by the same artifact?
         [{{"value": null, "type": "problem", "embedding": null}}, {{"value": null, "type": "artifactClass", "embedding": null}}]
+        Question: How many stakeholders are affected by the lack of software evolution history?
+        [{{"value": "lack of software evolution history", "type": "problem", "embedding": null}}, {{"value": null, "type": "stakeholder", "embedding": null}}]
 
         # NEGATIVE EXAMPLE
         Question: What's the weather today?

@@ -6,18 +6,31 @@ import pandas as pd
 
 async def start_interface():
     #try:
+        MAX_CHARS = 150
         st.set_page_config(page_title="RAG System", layout="wide")
         page = st.sidebar.selectbox("Navigation", ["Queries", "History", "Logs", "Statistics"])
         st.title("RAG System")
         
         if page == "Queries":
-            st.warning("Questions will be stored for data analysis. Do not enter personal information.")
+            st.warning("Questions will be stored for data analysis. Do not enter personal information(name, password, credit card numbers, email, address, etc.).")
+
+            st.subheader("What kind of questions can you ask?")
+            st.markdown("""
+                **Examples:**
+                - "What challenges do software developers face?"
+                - "What advancements have been made in software product lines?"
+                - "What is the impact of model variants comparison on EMF-based model variants?"
+                - "What are the main challenges in software architecture?"
+                - "How many stakeholders are affected by the lack of software evolution history?"
+            """)
+
             if "history" not in st.session_state:
                 st.session_state.history = []
 
             question = st.text_input("Enter your question:", value="")
-
-            if st.button("Ask"):
+            if len(question) > MAX_CHARS:
+                st.warning(f"Your question is too long. Please keep it under {MAX_CHARS} characters.")
+            if st.button("Ask", disabled=len(question) > MAX_CHARS):
                 if question:
                     with st.spinner("Processing..."):
                             response_placeholder = st.empty()
