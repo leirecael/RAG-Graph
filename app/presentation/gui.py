@@ -1,10 +1,10 @@
 import streamlit as st
 from logic.orchestrator import process_question
-from data.log_reader import read_data_logs, read_error_logs, get_log_statistics_by_type
-from data.logger import log_error
+from logic.logs_service import get_logs, get_log_statistics_by_type
+from logs.logger import log_error
 import pandas as pd
 
-async def start_interface():
+async def start_interface() -> None:
     #try:
         MAX_CHARS = 150
         st.set_page_config(page_title="RAG System", layout="wide")
@@ -19,7 +19,7 @@ async def start_interface():
                 **Examples:**
                 - "What challenges do software developers face?"
                 - "What advancements have been made in software product lines?"
-                - "What is the impact of model variants comparison on EMF-based model variants?"
+                - "What problems are related?"
                 - "What are the main challenges in software architecture?"
                 - "How many stakeholders are affected by the lack of software evolution history?"
             """)
@@ -32,7 +32,7 @@ async def start_interface():
                 st.warning(f"Your question is too long. Please keep it under {MAX_CHARS} characters.")
             if st.button("Ask", disabled=len(question) > MAX_CHARS):
                 if question:
-                    with st.spinner("Processing..."):
+                    with st.spinner("Processing...", show_time=True):
                             response_placeholder = st.empty()
                             #try:
                             response = await process_question(question)
@@ -67,8 +67,7 @@ async def start_interface():
             st.subheader("Logs")
             log_category = st.radio("Select log type", ["Queries", "LLM Calls", "Embeddings", "Database", "Errors"])
 
-            logs_by_type = read_data_logs()
-            error_logs = read_error_logs()
+            logs_by_type, error_logs = get_logs()
 
             if log_category == "Queries":
                 data = logs_by_type["register_query"]
@@ -89,55 +88,56 @@ async def start_interface():
 
         elif page == "Statistics":
             stats_by_type = get_log_statistics_by_type()
-
-            st.markdown("Log Statistics by Type")
-            for log_type, stat in stats_by_type.items():
-                with st.expander(f"Log Type: {log_type}"):
-                    if "task_name" in stat["df"].columns:
-                        
-                        task_names = stat["df"]["task_name"].unique()
-                        selected_task = st.selectbox(f"Select Task for {log_type}", options=task_names)
-
-                       
-                        filtered_df = stat["df"][stat["df"]["task_name"] == selected_task]
-                        
-                        
-                        task_stat = {
-                            "total_cost": filtered_df["cost"].sum() if "cost" in filtered_df else None,
-                            "avg_cost": filtered_df["cost"].mean() if "cost" in filtered_df else None,
-                            "avg_duration_s": filtered_df["log_duration_sec"].mean() if "log_duration_sec" in filtered_df else None,
-                            "count": len(filtered_df),
-                            "df": filtered_df
-                        }
-                        
-                        
-                        col1, col2= st.columns(2)
-                        col1.metric("Total Entries", task_stat["count"])
-                        col2.metric("Avg Duration (s)", f"{task_stat['avg_duration_s']:.2f}")
-                        
-                        if task_stat["avg_cost"] is not None:
-                            col1, col2 = st.columns(2)
-                            col1.metric("Average Cost (€)", f"{task_stat['avg_cost']:.4f}")
-                            col2.metric("Total Cost (€)", f"{task_stat['total_cost']:.4f}")
-                        
+            if stats_by_type:
+                st.markdown("Log Statistics by Type")
+                for log_type, stat in stats_by_type.items():
+                    with st.expander(f"Log Type: {log_type}"):
+                        if "task_name" in stat["df"].columns:
+                            
+                            task_names = stat["df"]["task_name"].unique()
+                            selected_task = st.selectbox(f"Select Task for {log_type}", options=task_names)
 
                         
-                        if "cost" in filtered_df.columns:
-                            st.line_chart(filtered_df[["cost"]].reset_index(drop=True), use_container_width=True)
-
-                    else:
-                        col1, col2 = st.columns(2)
-                        col1.metric("Total Entries", stat["count"])                       
-                        col2.metric("Avg Duration (s)", f"{stat['avg_duration_s']:.2f}")
-
-                        if stat["avg_cost"] is not None:
+                            filtered_df = stat["df"][stat["df"]["task_name"] == selected_task]
+                            
+                            
+                            task_stat = {
+                                "total_cost": filtered_df["cost"].sum() if "cost" in filtered_df else None,
+                                "avg_cost": filtered_df["cost"].mean() if "cost" in filtered_df else None,
+                                "avg_duration_s": filtered_df["log_duration_sec"].mean() if "log_duration_sec" in filtered_df else None,
+                                "count": len(filtered_df),
+                                "df": filtered_df
+                            }
+                            
+                            
                             col1, col2= st.columns(2)
-                            col1.metric("Average Cost (€)", f"{stat['avg_cost']:.4f}")
-                            col2.metric("Total Cost (€)", f"{stat['total_cost']:.4f}")
-                        
-                        if "cost" in stat["df"].columns:
-                            st.line_chart(stat["df"][["cost"]].reset_index(drop=True), use_container_width=True)
+                            col1.metric("Total Entries", task_stat["count"])
+                            col2.metric("Avg Duration (s)", f"{task_stat['avg_duration_s']:.2f}")
+                            
+                            if task_stat["avg_cost"] is not None:
+                                col1, col2 = st.columns(2)
+                                col1.metric("Average Cost (€)", f"{task_stat['avg_cost']:.4f}")
+                                col2.metric("Total Cost (€)", f"{task_stat['total_cost']:.4f}")
+                            
 
+                            
+                            if "cost" in filtered_df.columns:
+                                st.line_chart(filtered_df[["cost"]].reset_index(drop=True), use_container_width=True)
+
+                        else:
+                            col1, col2 = st.columns(2)
+                            col1.metric("Total Entries", stat["count"])                       
+                            col2.metric("Avg Duration (s)", f"{stat['avg_duration_s']:.2f}")
+
+                            if stat["avg_cost"] is not None:
+                                col1, col2= st.columns(2)
+                                col1.metric("Average Cost (€)", f"{stat['avg_cost']:.4f}")
+                                col2.metric("Total Cost (€)", f"{stat['total_cost']:.4f}")
+                            
+                            if "cost" in stat["df"].columns:
+                                st.line_chart(stat["df"][["cost"]].reset_index(drop=True), use_container_width=True)
+            else:
+                st.info("No statistics available.")
     # except Exception as e:
     #     log_error("GUIError", {
     #         "error": str(e), 

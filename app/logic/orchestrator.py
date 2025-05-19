@@ -1,18 +1,14 @@
-from logic.validator import validate_question
-from data.database_connector import execute_query, generate_similarity_queries, execute_multiple_queries_with_apoc
-from llm.llm_client import get_embedding, call_llm
-from logic.question_processor import extract_entities
-from logic.cypher_generator import create_cypher_query
-from logic.prompt_enricher import enrich_prompt
-from data.logger import log_data, log_error
+from data.neo4j_client import execute_query, execute_multiple_queries
+from logic.llm_tasks import validate_question, extract_entities, create_cypher_query, generate_final_answer, generate_entity_embeddings
+from logs.logger import log_data, log_error
+from logic. neo4j_logic import generate_similarity_queries, parse_similarity_results, parse_related_nodes_results
 import json
 import time
 from datetime import datetime
 from models.entity import EntityList, Entity
 from models.question import Question
-import asyncio
 
-async def process_question(userQuestion):
+async def process_question(userQuestion: str) -> str:
     start = time.time()
     total_cost = 0
 
@@ -48,13 +44,10 @@ async def process_question(userQuestion):
     total_cost +=cost
     
     try:
-        entities_with_value = [e for e in extracted_entities.entities if not e.value is None]
+        extracted_entities.entities, cost = await generate_entity_embeddings(extracted_entities.entities)
+        entities_with_value = [e for e in extracted_entities.entities if e.value is not None]
         
-        embedding_results = await asyncio.gather(*(get_embedding(e.value, task_name="embed_entity") for e in entities_with_value))
-
-        for entity, (embedding, cost) in zip(entities_with_value, embedding_results):
-            entity.embedding = embedding
-            total_cost +=cost
+        total_cost += cost
     except Exception as e:
             log_error("EmbeddingError", {
                 "question": question.value,
@@ -66,21 +59,22 @@ async def process_question(userQuestion):
         if entities_with_value:
             start_sim = time.time()
             queries = generate_similarity_queries(entities_with_value)
-            similarity_results = execute_multiple_queries_with_apoc(queries)
+            db_results = execute_multiple_queries(queries)
+            similarity_results = parse_similarity_results(db_results)
             end_sim = time.time()
             log_data({
                 "timestamp": datetime.now().isoformat(),
                 "log_type": "database",
                 "task_name": "similarity_calculation",
                 "user_prompt": question.value,
-                "final_response": similarity_results,
+                "final_response": json.dumps(similarity_results),
                 "log_duration_sec": end_sim-start_sim,
             })
     except Exception as e:
             log_error("SimilarityError", {
                 "question": question.value,
-                "entity": entity.value,
-                "entity_type": entity.type,
+                "entities": [entity.value for entity in entities_with_value],
+                "entity_types": [entity.type for entity in entities_with_value],
                 "error": str(e), 
             })
             raise
@@ -114,7 +108,8 @@ async def process_question(userQuestion):
 
     try:
         start_db = time.time()
-        related_nodes = execute_query(cypher_query)
+        db_results = execute_query(cypher_query)
+        related_nodes = parse_related_nodes_results(db_results)
         end_db = time.time()
         log_data({
             "timestamp": datetime.now().isoformat(),
@@ -140,24 +135,13 @@ async def process_question(userQuestion):
                     "nodes": all_relevant_nodes, 
                 })
         return "No available information. Please, reword your question or try another one."
-    try:
-        final_prompt, system_prompt = enrich_prompt(question.value,related_nodes)
-        
-    except Exception as e:
-        log_error("EnrichmentError", {
-            "question": question.value,
-            "nodes": related_nodes,
-            "error": str(e), 
-        })
-        raise
-
 
     try:
-        final_answer, cost = await call_llm(final_prompt, system_prompt,task_name="rag_answer_generation")
+        final_answer, cost = await generate_final_answer(question.value, related_nodes)
     except Exception as e:
         log_error("ResponseGenerationError", {
             "question": question.value,
-            "prompt": final_prompt,
+            "context": related_nodes,
             "error": str(e), 
         })
         raise
@@ -179,3 +163,4 @@ async def process_question(userQuestion):
 
 #how to address the lack of flexibility in model variants to enchance model variants comparison that happens in EMF-based model variants?
 #what problems do software developers have?
+     

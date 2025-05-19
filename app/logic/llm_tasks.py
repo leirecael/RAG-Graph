@@ -1,0 +1,204 @@
+import asyncio
+from llm.llm_client import call_llm, call_llm_structured, get_embedding
+from models.entity import Entity
+
+async def validate_question(question: str)->tuple[str, float]:
+    system_prompt = "You are a research domain classifier. Only return true if the question relates to technical or scientific issues."
+
+    prompt = f"""
+        # TASK
+        Validate whether a question fits within a research or technical knowledge graph.
+        
+        # GRAPH SCHEMA
+        (:problem)-[:arisesAt]->(:context)
+        (:problem)-[:concerns]->(:stakeholder)
+        (:problem)-[:informs]->(:goal)
+        (:requirement)-[:meetBy]->(:artifactClass)
+        (:problem)-[:addressedBy]->(:artifactClass)
+        (:goal)-[:achievedBy]->(:requirement)
+
+        # VALID
+        - Research problems
+        - Technical improvements
+        - Structured scientific inquiries
+        - Questions related to graph nodes.
+
+        # INVALID
+        - News, opinions, non-technical questions
+
+        # EXAMPLES
+        Q: How can feature models improve reuse? -> true
+        Q: Who won the match? -> false
+        Q: What problems are there? -> true
+
+        #FORMAT
+        A JSON objects with: value(the question, fixed if orthographically incorrct), is_valid(true or false), reasoning (why it is not valid) 
+
+        # QUESTION
+        {question}
+    """
+    
+    response, cost = await call_llm_structured(prompt, system_prompt, text_format="question", task_name="question_validation")
+
+    return response, cost
+
+async def extract_entities(question: str) -> tuple[str, float]:
+
+    system_prompt = "You are an expert entity extractor for scientific knowledge graphs. Extract only entities that are clearly present or directly implied. Do not invent entities."
+
+    prompt = f"""
+        # TASK
+        Extract relevant entities from the question. You must understand the user's intention. Understand which entities will give the user the answer they want. 
+
+        # ENTITY TYPES
+        - problem: a deficiency or issue (e.g. lack of traceability)
+        - stakeholder: person or group affected (e.g. developers)
+        - goal: desired high-level outcome (e.g. improve maintainability)
+        - context: domain or situation (e.g. safety-critical systems)
+        - requirement: system-level functionality or need
+        - artifactClass: type of technical solution to a problem (e.g. feature model)
+        
+        # RELATIONSHIPS
+        - (problem)-[:arisesAt]->(context)
+        - (problem)-[:concerns]->(stakeholder)
+        - (problem)-[:informs]->(goal)
+        - (requirement)-[:meetBy]->(artifactClass)
+        - (problem)-[:addressedBy]->(artifactClass)
+        - (goal)-[:achievedBy]->(requirement)
+
+        # FORMAT
+        List of JSON objects with: value, type, embedding (always null). value and type can never be the same (e.g. {{"value": "stakeholders", "type": "stakeholder", "embedding": null}}, {{"value": "goal", "type": "goal", "embedding": null}}, etc.)
+
+        # POSITIVE EXAMPLES
+        Question: What problems do developers face?
+        [{{"value": "developers", "type": "stakeholder", "embedding": null}}, {{"value": null, "type": "problem", "embedding": null}}]
+        Question: How can we fix the problem of climate change?
+        [{{"value": "climate change", "type": "problem", "embedding": null}}, {{"value": null, "type": "artifactClass", "embedding": null}}]
+        Question: What problems are solved by the same artifact?
+        [{{"value": null, "type": "problem", "embedding": null}}, {{"value": null, "type": "artifactClass", "embedding": null}}]
+        Question: How many stakeholders are affected by the lack of software evolution history?
+        [{{"value": "lack of software evolution history", "type": "problem", "embedding": null}}, {{"value": null, "type": "stakeholder", "embedding": null}}]
+
+        # NEGATIVE EXAMPLE
+        Question: What's the weather today?
+        []
+
+        # QUESTION
+        {question}
+    """
+
+    response, cost = await call_llm_structured(prompt, system_prompt, text_format="entitylist", task_name="entity_extraction") 
+    return response, cost
+
+async def generate_entity_embeddings(entities: list[Entity])->tuple[list[Entity], float]:
+    total_cost = 0.0
+    entities_with_value = [e for e in entities if e.value is not None]
+
+    embedding_results = await asyncio.gather(*(get_embedding(e.value, task_name="embed_entity") for e in entities_with_value))
+
+    for entity, (embedding, cost) in zip(entities_with_value, embedding_results):
+        entity.embedding = embedding
+        total_cost += cost
+
+    return entities, total_cost
+
+async def create_cypher_query(question: str, all_relevant_nodes:dict) -> tuple[str, float]:
+    system_prompt = "You are a Cypher query generator for a scientific knowledge graph. Only return the query."
+
+    prompt = f"""
+        # TASK
+        You are given a question and a set of relevant node types with optional filters.
+        Generate a syntactically and semantically correct Cypher query using the schema, following the rules and examples below.
+
+        # GRAPH SCHEMA
+        (:problem)-[:arisesAt]->(:context)
+        (:problem)-[:concerns]->(:stakeholder)
+        (:problem)-[:informs]->(:goal)
+        (:requirement)-[:meetBy]->(:artifactClass)
+        (:problem)-[:addressedBy]->(:artifactClass)
+        (:goal)-[:achievedBy]->(:requirement)
+
+        # RULES
+        1. Always use entity types as labels, e.g. (p:problem).
+        2. For each entry in AVAILABLE NODES:
+        - If the value is a list, use `name IN [...]`
+        - If the value is None, filter with `name IS NOT NULL`
+        - If multiple nodes of the same type are needed, use aliases like p1, p2.
+        3. Always use `WITH DISTINCT` to eliminate duplicates before RETURN.
+        4. Use `LIMIT` only when relevant.
+        5. Always return: `name`, `description`, `hypernym`, `alternativeName` and `labels(...)` for all nodes involved. For queries that need 'COUNT' or other types of functions, you can add those fucntions as extra.
+        6. Do not rename output fields. Maintain standard Cypher return format.
+        7. Only generate the Cypher query. Do not add comments or explanations.
+        8. You can traverse the graph to look for related ideas. Use all schema relationships that apply.(e.g. artifacts related by problem and requirement, goals related by requirement and problem)
+
+        # EXAMPLES
+        Q: What problems are solved by the same artifact?
+        AVAILABLE NODES: {{'problem': None, 'artifactClass': None}}
+        ->
+        MATCH (p1:problem)-[:addressedBy]->(a:artifactClass)<-[:addressedBy]-(p2:problem)
+        WHERE p1.name IS NOT NULL AND a.name IS NOT NULL AND p2.name IS NOT NULL AND p1 <> p2
+        WITH DISTINCT p1, a, p2
+        RETURN p1.name, p1.description, p1.hypernym, p1.alternativeName, labels(p1),
+            p2.name, p2.description, p2.hypernym, p2.alternativeName, labels(p2),
+            a.name, a.description, a.hypernym, a.alternativeName, labels(a)
+
+        Q: What problems are related?
+        AVAILABLE NODES: {{'problem': None}}
+        ->
+        MATCH (p1:problem)-[:arisesAt|concerns|informs]->(x)<-[:arisesAt|concerns|informs]-(p2:problem)
+        WHERE p1 <> p2
+        WITH DISTINCT p1, p2, x
+        RETURN p1.name, p1.description, p1.hypernym, p1.alternativeName, labels(p1),
+            p2.name, p2.description, p2.hypernym, p2.alternativeName, labels(p2),
+            x.name, x.description, x.hypernym, x.alternativeName, labels(x)
+
+        # QUESTION
+        {question}
+
+        # AVAILABLE NODES
+        {all_relevant_nodes}
+    """
+
+    query, cost = await call_llm(prompt, system_prompt, model= "gpt-4.1",task_name="cypher_generation")
+    return query, cost
+
+async def generate_final_answer(question:str, context:dict)->tuple[str,float]:
+    prompt, system_prompt = enrich_prompt(question,context)
+    final_answer, cost = await call_llm(prompt, system_prompt,task_name="rag_answer_generation")
+    return final_answer, cost
+
+def enrich_prompt(question:str, context:dict)-> tuple[str,str]:
+    node_blocks = []
+    for category, nodes in context['entities'].items():
+        if nodes:
+            node_blocks.append(f"### {category.upper()}")
+            for name, data in nodes.items():
+                alt_name = f"{data['alternativeName']}" if 'alternativeName' in data else ""
+                node_blocks.append(f"-**{name}({alt_name};{data['hypernym']})**: {data['description']} [{', '.join(data['labels'])}]")
+
+    rel_lines = []
+    for rel in context['relationships']:
+        rel_lines.append(f"- {rel['from']} --[{rel['type']}]--> {rel['to']}")
+
+    oth_lines = []
+    for key, value in context["others"].items():
+        oth_lines.append(f"-{key}: {value}")
+    system_prompt = """You are an expert assistant that answers questions based strictly on structured graph data. Use only the information provided. Do not make assumptions or fabricate details. 
+                        If the graph does not provide enough information, say so clearly. 'Others' type information may not be accurate, make your own judgments to change it and don't mention the inaccuracy. Provide answers that are technically accurate and well-organized. Do not give explanations about the system, database or how the context you were given is structured."""
+    prompt = f"""Use the following information to answer the question. Keep in mind that this information was processed beforehand to remove duplicate information, so inaccuracies can happen in the Others section when talking about quantities.
+
+    
+
+        ### QUESTION
+        {question}
+
+        ### ENTITIES
+        {"\n".join(node_blocks)}
+
+        ### RELATIONSHIPS
+        {"\n".join(rel_lines)}
+
+        ### OTHERS
+        {"\n".join(oth_lines)}
+    """
+    return prompt, system_prompt

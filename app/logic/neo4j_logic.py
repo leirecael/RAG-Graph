@@ -1,20 +1,7 @@
-from neo4j import GraphDatabase
-from config.config import NEO4J_URI,NEO4J_PASSWORD,NEO4J_USER
+from models.entity import Entity
 
-driver = None
-def get_driver():
-    global driver
-    if driver is None:
-        driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
-    return driver
 
-def close_driver():
-    global driver
-    if driver:
-        driver.close()
-        driver = None
-
-def generate_similarity_queries(entities_with_value: list, threshold: float = 0.5, top_k: int = 3):
+def generate_similarity_queries(entities_with_value: list[Entity], threshold: float = 0.6, top_k: int = 3)->list[dict]:
     queries_with_params = []
     for entity in entities_with_value:
         query = f"""
@@ -36,22 +23,8 @@ def generate_similarity_queries(entities_with_value: list, threshold: float = 0.
         })
     return queries_with_params
 
-def execute_multiple_queries_with_apoc(queries_with_params: list[dict]):
-    query = """
-    UNWIND $queriesWithParams AS qp
-    CALL apoc.cypher.run(qp.query, qp.params) YIELD value
-    RETURN value
-    """
-    driver = get_driver()
-    with driver.session() as session:
-        result = session.run(query, {
-            "queriesWithParams": queries_with_params
-        })
-        records = result.data()
-        return group_similarity_results_by_label(records)
-    
-def group_similarity_results_by_label(results: list[dict]) -> dict[str, list[str]]:
-    grouped = {}
+def parse_similarity_results(results: list[dict]) -> dict[str, list[str]]:
+    parsed = {}
 
     for item in results:
         data = item["value"]  
@@ -60,21 +33,14 @@ def group_similarity_results_by_label(results: list[dict]) -> dict[str, list[str
             continue  
         
         primary_label = labels[0]  
-        if primary_label not in grouped:
-            grouped[primary_label] = []
+        if primary_label not in parsed:
+            parsed[primary_label] = []
 
-        grouped[primary_label].append(data["name"])
+        parsed[primary_label].append(data["name"])
 
-    return grouped
+    return parsed
 
-def execute_query(cypher_query: str, parameters: dict = None):
-    driver = get_driver()
-    with driver.session() as session:
-        result = session.run(cypher_query, parameters or {})
-        records = result.data()
-        return extract_unique_entities(records)
-
-def extract_unique_entities(records: list) -> dict:
+def parse_related_nodes_results(records: list[dict]) -> dict:
     CATEGORY_MAP = {
         'problem': 'problems',
         'stakeholder': 'stakeholders',
@@ -91,7 +57,7 @@ def extract_unique_entities(records: list) -> dict:
 
     for record in records:
         for key, value in record.items():
-            if '.' not in key and "labels" not in key:
+            if '.' not in key and not key.startswith('labels'):
                 if isinstance(value, list):
                     others[key] = remove_redundant_text_in_list(value)
                 elif isinstance(value, str):
@@ -189,73 +155,3 @@ def remove_redundant_text_in_list(items: list) -> list:
             result.append(cleaned_text)
 
     return result
-
-def remove_redundant_text(text: str) -> str:
-    seen = set()
-    result = []
-
-    for part in text.split(';'):
-        cleaned = part.strip()
-        key = cleaned.lower()
-        if key and key not in seen:
-            seen.add(key)
-            result.append(cleaned)
-    return '; '.join(result)
-
-
-def remove_redundant_text_in_list(items: list) -> list:
-    seen = set()
-    result = []
-
-    for item in items:
-        cleaned_text = remove_redundant_text(str(item)).strip()
-        key = cleaned_text.lower()
-        if key and key not in seen:
-            seen.add(key)
-            result.append(cleaned_text)
-    return result
-# async def prob():
-#     query = """MATCH (p1:problem), (ac:artifactClass), (p2:problem)
-#     MATCH (p1)-[:addressedBy]->(ac)<-[:addressedBy]-(p2)
-#     WHERE p1.name IS NOT NULL AND ac.name IS NOT NULL AND p1 <> p2
-#     WITH DISTINCT p1, ac, p2
-#     RETURN p1.name, p1.description, labels(p1),
-#         p2.name, p2.description, labels(p2),
-#         ac.name, ac.description, labels(ac)"""
-#     resultados = await execute_query(query)
-#     print(resultados)
-
-
-# async def prueba(embedding):
-#     driver = await get_driver()
-#     query = f"""WITH $embedding AS consulta_vector
-#         MATCH (n:stakeholder {{name: "software developers"}})
-#         WHERE n.embedding IS NOT NULL
-#         RETURN gds.similarity.cosine(consulta_vector, n.embedding) AS similarity, n.name as name"""
-#     async with driver.session() as session:
-#         result = await session.run(query, {
-#             "embedding": embedding,
-#         })
-#         records = await result.data()
-#         return [{"node": record["name"], "similarity": record["similarity"]} for record in records]
-
-# async def get_similar_nodes_by_entity(entity: str, embedding: list[float], threshold: float = 0.5, top_k: int = 3):
-#     query = f"""
-#     WITH $embedding AS embedding
-#     MATCH (n:{entity})
-#     WHERE n.embedding IS NOT NULL
-#     WITH n, gds.similarity.cosine(embedding, n.embedding) AS similarity
-#     WHERE similarity >= $threshold
-#     RETURN DISTINCT n.name as name, similarity
-#     ORDER BY similarity DESC
-#     LIMIT $top_k
-#     """
-#     driver = await get_driver()
-#     async with driver.session() as session:
-#         result = await session.run(query, {
-#             "embedding": embedding,
-#             "threshold": threshold,
-#             "top_k": top_k
-#         })
-#         records = await result.values()
-#         return [{"name":name, "similarity": similarity} for name, similarity in records]#return [record["name"] for record in records]

@@ -6,7 +6,7 @@ from datetime import datetime
 import time
 from models.entity import EntityList
 from models.question import Question
-from data.logger import log_data
+from logs.logger import log_data
 
 openai.api_key = OPENAI_API_KEY
 client = AsyncOpenAI()
@@ -26,7 +26,7 @@ RESPONSE_FORMAT = {
     "question": Question
 }
 
-async def call_llm(user_prompt, system_prompt, model="gpt-4.1", temperature=0.7, task_name = None):
+async def call_llm(user_prompt:str, system_prompt:str, model:str="gpt-4.1", temperature:float=0.7, task_name:str = None)->tuple[str, float]:
     start_time = time.time()
     if model not in MODEL_INFO:
         raise ValueError(f"Unknown model: {model}")
@@ -62,7 +62,7 @@ async def call_llm(user_prompt, system_prompt, model="gpt-4.1", temperature=0.7,
     })
     return response.output_text, cost
 
-async def call_llm_structured(user_prompt, system_prompt, model="gpt-4.1", temperature=0.7, text_format=None, task_name = None):
+async def call_llm_structured(user_prompt: str, system_prompt:str, model:str ="gpt-4.1", temperature:float=0.7, text_format:str=None, task_name:str = None)->tuple[str, float]:
     start_time = time.time()
     if model not in MODEL_INFO:
         raise ValueError(f"Unknown model: {model}")
@@ -98,10 +98,9 @@ async def call_llm_structured(user_prompt, system_prompt, model="gpt-4.1", tempe
         "cost": cost,
         "log_duration_sec": duration_sec
     })
-
     return response.choices[0].message.content, cost
 
-async def get_embedding(text, model="text-embedding-3-large", task_name = None):
+async def get_embedding(text:str, model:str="text-embedding-3-large", task_name:str = None)->tuple[list[float],float]:
     start_time = time.time()
     if model not in MODEL_INFO:
         raise ValueError(f"Unknown model: {model}")
@@ -124,7 +123,7 @@ async def get_embedding(text, model="text-embedding-3-large", task_name = None):
     })
     return response.data[0].embedding, cost
 
-def calculate_token_cost(model, input_tokens=0, output_tokens=0, total_tokens=0) -> float:
+def calculate_token_cost(model:str, input_tokens:int=0, output_tokens:int=0, total_tokens:int=0) -> float:
     if model not in MODEL_INFO:
         raise ValueError(f"Unknown model pricing for: {model}")
     pricing = MODEL_INFO[model]
@@ -136,7 +135,7 @@ def calculate_token_cost(model, input_tokens=0, output_tokens=0, total_tokens=0)
         return (input_tokens / 1000) * pricing["input_price"] + (output_tokens / 1000) * pricing["output_price"]
     raise ValueError("Missing token values or unsupported model.")
 
-def truncate_prompt(prompt,model, max_tokens) -> str:
+def truncate_prompt(prompt:str,model:str, max_tokens:int) -> str:
     encodig = tiktoken.get_encoding(model)
     tokens = encodig.encode(prompt)
     if len(tokens)<max_tokens:
