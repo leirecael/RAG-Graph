@@ -1,9 +1,46 @@
 import asyncio
+import json
+from presidio_analyzer import AnalyzerEngine
 from llm.llm_client import call_llm, call_llm_structured, get_embedding
 from models.entity import Entity
 
+pii_analyzer = AnalyzerEngine()
+
+def contains_pii(text: str) -> bool:
+    """
+    Check if a given text contains any PII (Personally Identifiable Information).
+    
+    Args:
+        text (str): The input text to analyze.
+        
+    Returns:
+        bool: True if PII is detected, False otherwise.
+    """
+    results = pii_analyzer.analyze(text=text, entities=[], language='en')
+    return len(results) > 0
+
 async def validate_question(question: str)->tuple[str, float]:
-    system_prompt = "You are a research domain classifier. Only return true if the question relates to technical or scientific issues."
+    """
+    Validate if the question is research/technical in nature and safe (e.g. no PII).
+    
+    Args:
+        question (str): The input user question.
+        
+    Returns:
+        tuple[str, float]: A JSON string with the structured quesion validation, and the LLM API cost.
+    """
+
+    #Check for PII in the question
+    if contains_pii(question):
+        response ={
+            "value": question,
+            "is_valid": False,
+            "reasoning": "PII detected in the input question."
+        }
+        return json.dumps(response), 0.0
+    
+    #Build system and user prompts for LLM
+    system_prompt = "You are a research domain classifier. Only return true if the question relates to technical or scientific issues and is safe."
 
     prompt = f"""
         # TASK
@@ -30,6 +67,7 @@ async def validate_question(question: str)->tuple[str, float]:
         Q: How can feature models improve reuse? -> true
         Q: Who won the match? -> false
         Q: What problems are there? -> true
+        Q: *suspicious input(injection)* -> false
 
         #FORMAT
         A JSON objects with: value(the question, fixed if orthographically incorrct), is_valid(true or false), reasoning (why it is not valid) 
@@ -37,13 +75,23 @@ async def validate_question(question: str)->tuple[str, float]:
         # QUESTION
         {question}
     """
-    
+    #Call structured LLM to validate the question, ask for the Quesion model as return output(text_format)
     response, cost = await call_llm_structured(prompt, system_prompt, text_format="question", task_name="question_validation")
 
     return response, cost
 
 async def extract_entities(question: str) -> tuple[str, float]:
+    """
+    Extract entities from a user question based on the database schema.
+    
+    Args:
+        question (str): The input question.
+        
+    Returns:
+        tuple[str, float]: A JSON list of entities and the LLM API cost.
+    """
 
+    #Build system and user prompts for LLM
     system_prompt = "You are an expert entity extractor for scientific knowledge graphs. Extract only entities that are clearly present or directly implied. Do not invent entities."
 
     prompt = f"""
@@ -51,11 +99,11 @@ async def extract_entities(question: str) -> tuple[str, float]:
         Extract relevant entities from the question. You must understand the user's intention. Understand which entities will give the user the answer they want. 
 
         # ENTITY TYPES
-        - problem: a deficiency or issue (e.g. lack of traceability)
-        - stakeholder: person or group affected (e.g. developers)
-        - goal: desired high-level outcome (e.g. improve maintainability)
+        - problem: a challenge or issue (e.g. lack of traceability)
+        - stakeholder: person or group affected or interested (e.g. developers)
+        - goal: an objective or desired outcome (e.g. improve maintainability)
         - context: domain or situation (e.g. safety-critical systems)
-        - requirement: system-level functionality or need
+        - requirement: specific need or condition
         - artifactClass: type of technical solution to a problem (e.g. feature model)
         
         # RELATIONSHIPS
@@ -86,16 +134,29 @@ async def extract_entities(question: str) -> tuple[str, float]:
         # QUESTION
         {question}
     """
-
+    #Call structured LLM to extract entities, ask for the EntityList model as return output(text_format)
     response, cost = await call_llm_structured(prompt, system_prompt, text_format="entitylist", task_name="entity_extraction") 
     return response, cost
 
 async def generate_entity_embeddings(entities: list[Entity])->tuple[list[Entity], float]:
+    """
+    Generate vector embeddings for entities that have a value.
+    
+    Args:
+        entities (list[Entity]): List of Entity objects (may include null values).
+        
+    Returns:
+        tuple[list[Entity], float]: Updated entities with embeddings and total API cost.
+    """
     total_cost = 0.0
+
+    # Filter entities with value for embedding
     entities_with_value = [e for e in entities if e.value is not None]
 
+    #Asynchronously embed all entity values
     embedding_results = await asyncio.gather(*(get_embedding(e.value, task_name="embed_entity") for e in entities_with_value))
 
+    #Update each entity with its corresponding embedding and sum costs
     for entity, (embedding, cost) in zip(entities_with_value, embedding_results):
         entity.embedding = embedding
         total_cost += cost
@@ -103,12 +164,24 @@ async def generate_entity_embeddings(entities: list[Entity])->tuple[list[Entity]
     return entities, total_cost
 
 async def create_cypher_query(question: str, all_relevant_nodes:dict) -> tuple[str, float]:
+    """
+    Generate a Cypher query for a knowledge graph based on the question and available nodes.
+    
+    Args:
+        question (str): The input question.
+        all_relevant_nodes (dict): Dictionary mapping entity types to specific node names or None.
+        
+    Returns:
+        tuple[str, float]: The generated Cypher query and the LLM API cost.
+    """
+
+    #Build system and user prompts for LLM
     system_prompt = "You are a Cypher query generator for a scientific knowledge graph. Only return the query."
 
     prompt = f"""
         # TASK
         You are given a question and a set of relevant node types with optional filters.
-        Generate a syntactically and semantically correct Cypher query using the schema, following the rules and examples below.
+        Generate a syntactically and semantically correct Cypher query using the schema, following the rules and examples below. Follor the schema relationships strictly.
 
         # GRAPH SCHEMA
         (:problem)-[:arisesAt]->(:context)
@@ -158,17 +231,38 @@ async def create_cypher_query(question: str, all_relevant_nodes:dict) -> tuple[s
         # AVAILABLE NODES
         {all_relevant_nodes}
     """
-
+    #Call LLM to generate the query
     query, cost = await call_llm(prompt, system_prompt, model= "gpt-4.1",task_name="cypher_generation")
     return query, cost
 
 async def generate_final_answer(question:str, context:dict)->tuple[str,float]:
+    """
+    Use the structured context and question to generate the final answer.
+    
+    Args:
+        question (str): The user question.
+        context (dict): Graph context including entities, relationships and other information.
+        
+    Returns:
+        tuple[str, float]: Final generated answer and LLM API cost.
+    """
     prompt, system_prompt = enrich_prompt(question,context)
     final_answer, cost = await call_llm(prompt, system_prompt,task_name="rag_answer_generation")
     return final_answer, cost
 
 def enrich_prompt(question:str, context:dict)-> tuple[str,str]:
+    """
+    Convert the structured graph context into a formatted text prompt for a LLM.
+    
+    Args:
+        question (str): The user question.
+        context (dict): Graph context including entities, relationships and other information.
+        
+    Returns:
+        tuple[str, str]: User prompt and system prompt for the LLM.
+    """
     node_blocks = []
+    #Group entities by type and format them
     for category, nodes in context['entities'].items():
         if nodes:
             node_blocks.append(f"### {category.upper()}")
@@ -177,14 +271,24 @@ def enrich_prompt(question:str, context:dict)-> tuple[str,str]:
                 node_blocks.append(f"-**{name}({alt_name};{data['hypernym']})**: {data['description']} [{', '.join(data['labels'])}]")
 
     rel_lines = []
+    #Format relationship list
     for rel in context['relationships']:
         rel_lines.append(f"- {rel['from']} --[{rel['type']}]--> {rel['to']}")
 
+    # Format additional info
     oth_lines = []
     for key, value in context["others"].items():
         oth_lines.append(f"-{key}: {value}")
-    system_prompt = """You are an expert assistant that answers questions based strictly on structured graph data. Use only the information provided. Do not make assumptions or fabricate details. 
-                        If the graph does not provide enough information, say so clearly. 'Others' type information may not be accurate, make your own judgments to change it and don't mention the inaccuracy. Provide answers that are technically accurate and well-organized. Do not give explanations about the system, database or how the context you were given is structured."""
+
+
+    system_prompt = """You are an expert assistant that answers questions based strictly on structured graph data. 
+                        Use only the information provided. 
+                        Do not make assumptions or fabricate details. 
+                        If the graph does not provide enough information, say so clearly. 
+                        Provide answers that are technically accurate and well-organized. 
+                        Do not give explanations about the system, database or how the context you were given is structured."""
+    
+    #Build final prompt
     prompt = f"""Use the following information to answer the question. Keep in mind that this information was processed beforehand to remove duplicate information, so inaccuracies can happen in the Others section when talking about quantities.
 
     

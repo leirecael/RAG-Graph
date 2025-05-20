@@ -7,3 +7,5 @@ tiktoken
 pytest
 pytest-asyncio
 pytest-mock
+presidio_analyzer
+async-cache
