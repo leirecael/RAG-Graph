@@ -243,8 +243,4 @@ async def process_question(userQuestion: str) -> str:
     })
 
     return final_answer
-
-
-#how to address the lack of flexibility in model variants to enchance model variants comparison that happens in EMF-based model variants?
-#what problems do software developers have?
      

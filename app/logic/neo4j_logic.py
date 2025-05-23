@@ -13,11 +13,18 @@ def generate_similarity_queries(entities_with_value: list[Entity], threshold: fl
     Returns:
         list[dict]: List of dicts with 'query' and 'params' keys for batch execution.
     """
+    ALLOWED_LABELS = {"problem", "goal", "requirement", "context", "stakeholder", "artifactClass"}
+
     queries_with_params = []
+
     for entity in entities_with_value:
+        #Make sure the label is correct
+        if entity.type not in ALLOWED_LABELS:
+            raise ValueError(f"Invalid label: {entity.type}")
+        
         query = f"""
         WITH $embedding AS embedding
-        MATCH (n:$label)
+        MATCH (n:{entity.type})
         WHERE n.embedding IS NOT NULL
         WITH n, gds.similarity.cosine(embedding, n.embedding) AS similarity
         WHERE similarity >= $threshold
@@ -27,8 +34,7 @@ def generate_similarity_queries(entities_with_value: list[Entity], threshold: fl
         """
         params = {
             "embedding": entity.embedding,
-            "threshold": threshold,
-            "label": entity.type,
+            "threshold": threshold,           
             "top_k": top_k
 
         }

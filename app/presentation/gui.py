@@ -32,6 +32,9 @@ async def start_interface() -> None:
             #Warning message about data privacy
             st.warning("Questions will be stored for data analysis. Do not enter personal information(name, password, credit card numbers, email, address, etc.).")
 
+            #Basic information about the system
+            st.info("This is a prototype of a RAG system quering a knowladge graph about scientific information, mainly IT/computer related at the moment. Keep in mind the following six main categories when asking questions for a better experience: problems, stakeholders, goals, requirements, artifacts and context. Questions may take a while to answer.")
+
             #Example prompts to guide the user
             st.subheader("What kind of questions can you ask?")
             st.markdown("""
@@ -41,6 +44,7 @@ async def start_interface() -> None:
                 - "What problems are related?"
                 - "What are the main challenges in software architecture?"
                 - "How many stakeholders are affected by the lack of software evolution history?"
+                - "How to address the lack of flexibility in model variants to enchance model variants comparison that happens in EMF-based model variants?"
             """)
 
             #Initialize history in session if not already present
