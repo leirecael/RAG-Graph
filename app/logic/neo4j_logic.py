@@ -17,16 +17,20 @@ def generate_similarity_queries(entities_with_value: list[Entity], threshold: fl
     for entity in entities_with_value:
         query = f"""
         WITH $embedding AS embedding
-        MATCH (n:{entity.type})
+        MATCH (n:$label)
         WHERE n.embedding IS NOT NULL
         WITH n, gds.similarity.cosine(embedding, n.embedding) AS similarity
-        WHERE similarity >= {threshold}
+        WHERE similarity >= $threshold
         RETURN DISTINCT n.name as name, similarity, labels(n) as labels
         ORDER BY similarity DESC
-        LIMIT {top_k}
+        LIMIT $top_k
         """
         params = {
-            "embedding": entity.embedding
+            "embedding": entity.embedding,
+            "threshold": threshold,
+            "label": entity.type,
+            "top_k": top_k
+
         }
         queries_with_params.append({
             "query": query,
@@ -142,15 +146,17 @@ def parse_related_nodes_results(records: list[dict]) -> dict:
                         alias_map[alias] = label #Example: {'p': 'problem', 'c1': 'context', 'c2': 'context'}
 
         #Generate unique relationships between related entities
-        for (src_type, tgt_type), rel_type in valid_rels.items():
-            for src_alias, src_label in alias_map.items():
+        for (src_type, tgt_type), rel_type in valid_rels.items(): #Get a relationship(source, target)
+            for src_alias, src_label in alias_map.items(): #Get the source alias and label
                 if src_type == src_label: #Match source labels
-                    for tgt_alias, tgt_label in alias_map.items():
+                    for tgt_alias, tgt_label in alias_map.items(): #Get the target alias and label
                         if tgt_type == tgt_label: #Match target labels
                             src_name = record.get(f"{src_alias}.name")
                             tgt_name = record.get(f"{tgt_alias}.name")
                             if src_name and tgt_name:
+                                #Create the relationship
                                 rel_key = (src_name, tgt_name, rel_type)
+                                #Save the relationship if it is not duplicate
                                 if rel_key not in relationships_set:
                                     relationships_set.add(rel_key) #No duplicates
                                     relationships.append({

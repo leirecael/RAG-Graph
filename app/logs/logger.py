@@ -14,6 +14,8 @@ def log_data(data: dict) -> None:
     Args:
         data (dict): A dictionary containing data to log.
     """
+    if not isinstance(data, dict):
+        raise TypeError("log_data expects a dictionary")
     with open(DATA_LOG, "a", encoding="utf-8") as f:
         f.write(json.dumps(data, ensure_ascii=False) + "\n")
 
@@ -25,6 +27,8 @@ def log_error(error_type: str, error_details: dict) -> None:
         error_type (str): An identifier for the type of error (e.g., "ValidationError").
         error_details (dict): A dictionary containing error data.
     """
+    if not isinstance(error_details, dict):
+        raise TypeError("log_error expects a dictionary")
     data = {
         "timestamp": datetime.now().isoformat(),
         "error_type": error_type,

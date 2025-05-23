@@ -199,10 +199,10 @@ def calculate_token_cost(model:str, input_tokens:int=0, output_tokens:int=0, tot
     pricing = MODEL_INFO[model]
 
     #Embedding model price
-    if total_tokens > 0 and input_tokens == 0 and output_tokens == 0:
+    if isinstance(pricing, float) and total_tokens > 0 and input_tokens == 0 and output_tokens == 0:
         return (total_tokens / 1000) * pricing
     #LLM model price
-    elif "input_price" in pricing and "output_price" in pricing and total_tokens == 0:
+    elif "input_price" in pricing and "output_price" in pricing and total_tokens == 0 and input_tokens > 0 and output_tokens > 0:
         return (input_tokens / 1000) * pricing["input_price"] + (output_tokens / 1000) * pricing["output_price"]
     else:
         raise ValueError("Token values are incorrect.")

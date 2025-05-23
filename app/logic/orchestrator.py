@@ -9,6 +9,22 @@ from datetime import datetime
 from models.entity import EntityList, Entity
 from models.question import Question
 import re
+from presidio_analyzer import AnalyzerEngine
+
+pii_analyzer = AnalyzerEngine()
+
+def contains_pii(text: str) -> bool:
+    """
+    Check if a given text contains any PII (Personally Identifiable Information).
+    
+    Args:
+        text (str): The input text to analyze.
+        
+    Returns:
+        bool: True if PII is detected, False otherwise.
+    """
+    results = pii_analyzer.analyze(text=text, entities=[], language='en')
+    return len(results) > 0
 
 def sanitize_input(text: str) -> str:
     """
@@ -49,21 +65,26 @@ async def process_question(userQuestion: str) -> str:
     start = time.time()
     total_cost = 0
 
+    #Check if the questions contains PII
+    if contains_pii(userQuestion):
+        log_error("InvalidQuestionPII", {
+                "question": "PII containing question"
+            })
+        return "Invalid question, contains PII, try again."
+    
+    #Sanitize the user's input
+    sanitized_question = sanitize_input(userQuestion)
+    if len(sanitized_question) == 0:
+        return "Invalid question, try again."
+
     #1. Validate the question
-    try:
-        sanitized_question = sanitize_input(userQuestion)
+    try:      
         validation, cost =  await validate_question(sanitized_question)
         question = Question.model_validate(json.loads(validation))
 
         # If validation fails, log the error and inform the user
-        if not question.is_valid:
-            if "PII" in question.reasoning:
-                log_error("InvalidQuestionPII", {
-                    "question": "PII containing question",
-                    "reason": question.reasoning, 
-                })
-            else:
-                log_error("InvalidQuestion", {
+        if not question.is_valid:           
+            log_error("InvalidQuestion", {
                 "question": question.value,
                 "reason": question.reasoning, 
             })

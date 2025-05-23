@@ -1,27 +1,10 @@
 import asyncio
-import json
-from presidio_analyzer import AnalyzerEngine
 from llm.llm_client import call_llm, call_llm_structured, get_embedding
 from models.entity import Entity
 
-pii_analyzer = AnalyzerEngine()
-
-def contains_pii(text: str) -> bool:
-    """
-    Check if a given text contains any PII (Personally Identifiable Information).
-    
-    Args:
-        text (str): The input text to analyze.
-        
-    Returns:
-        bool: True if PII is detected, False otherwise.
-    """
-    results = pii_analyzer.analyze(text=text, entities=[], language='en')
-    return len(results) > 0
-
 async def validate_question(question: str)->tuple[str, float]:
     """
-    Validate if the question is research/technical in nature and safe (e.g. no PII).
+    Validate if the question is research/technical in nature and safe.
     
     Args:
         question (str): The input user question.
@@ -30,15 +13,6 @@ async def validate_question(question: str)->tuple[str, float]:
         tuple[str, float]: A JSON string with the structured quesion validation, and the LLM API cost.
     """
 
-    #Check for PII in the question
-    if contains_pii(question):
-        response ={
-            "value": question,
-            "is_valid": False,
-            "reasoning": "PII detected in the input question."
-        }
-        return json.dumps(response), 0.0
-    
     #Build system and user prompts for LLM
     system_prompt = "You are a research domain classifier. Only return true if the question relates to technical or scientific issues and is safe."
 
@@ -96,7 +70,7 @@ async def extract_entities(question: str) -> tuple[str, float]:
 
     prompt = f"""
         # TASK
-        Extract relevant entities from the question. You must understand the user's intention. Understand which entities will give the user the answer they want. 
+        Extract relevant entities from the question. You must understand the user's intention. Understand which entities will give the user the answer they want. If there is no question, return an empty list.
 
         # ENTITY TYPES
         - problem: a challenge or issue (e.g. lack of traceability)
@@ -176,12 +150,13 @@ async def create_cypher_query(question: str, all_relevant_nodes:dict) -> tuple[s
     """
 
     #Build system and user prompts for LLM
-    system_prompt = "You are a Cypher query generator for a scientific knowledge graph. Only return the query."
+    system_prompt = "You are a Cypher query generator for a scientific knowledge graph. You create queries based on the user's question and available nodes given to you."
 
     prompt = f"""
         # TASK
         You are given a question and a set of relevant node types with optional filters.
         Generate a syntactically and semantically correct Cypher query using the schema, following the rules and examples below. Follor the schema relationships strictly.
+        If there is no question or the available nodes dictionary is empty, return an empty string with no query.
 
         # GRAPH SCHEMA
         (:problem)-[:arisesAt]->(:context)

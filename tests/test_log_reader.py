@@ -1,35 +1,54 @@
 import os
 import json
 import tempfile
-import pandas as pd
 from unittest.mock import patch
-from app.data.log_reader import read_data_logs, read_error_logs, get_log_statistics_by_type
+from app.logs.log_reader import read_data_logs, read_error_logs
 
-def write_lines(path, lines):
+def write_lines(path: str, lines: list[dict]):
+    """
+    Helper function to write a list of dictionaries to a file as JSON lines.
+
+    Args:
+        path (str): File path to write to.
+        lines (list[dict]): List of dictionaries to serialize as JSON lines.
+    """
     with open(path, "w", encoding="utf-8") as f:
         for line in lines:
             f.write(json.dumps(line) + "\n")
 
-def test_read_data_logs_groups_by_type():
+#------read_data_logs-------
+def test_read_data_logs_reads_valid_lines():
+    """
+    Test that valid JSON entries in the data log file are read and returned correctly.
+    """
     with tempfile.TemporaryDirectory() as tmpdir:
         data_log = os.path.join(tmpdir, "data.jsonl")
         entries = [
-            {"log_type": "register_query", "cost": 2.5},
-            {"log_type": "embedding", "cost": 1.0},
-            {"log_type": "register_query", "cost": 3.0},
-            {"log_type": "other", "cost": 0.5}
+            {"message": "hey", "cost": 5},
+            {"message": "hi", "cost": 0}
         ]
         write_lines(data_log, entries)
 
-        with patch("app.data.log_reader.DATA_LOG", data_log):
+        #Patch log path and read entries
+        with patch("app.logs.log_reader.DATA_LOG", data_log):
             logs = read_data_logs()
 
-        assert "register_query" in logs
-        assert len(logs["register_query"]) == 2
-        assert len(logs["embedding"]) == 1
-        assert len(logs["database"]) == 0
+        assert len(logs) == 2
+        assert logs[0]["message"] == "hey"
 
+def test_read_data_logs_returns_empty_list_if_missing():
+    """
+    Test that reading from a nonexistent data log file returns an empty list.
+    """
+    with patch("app.logs.log_reader.DATA_LOG", "/non/existent/data.jsonl"):
+        logs = read_data_logs()
+        assert logs == []
+
+#------read_error_logs-------
 def test_read_error_logs_parses_all_valid_lines():
+    """
+    Test that valid JSON entries in the error log file are read correctly.
+    """
     with tempfile.TemporaryDirectory() as tmpdir:
         error_log = os.path.join(tmpdir, "errors.jsonl")
         entries = [
@@ -38,28 +57,17 @@ def test_read_error_logs_parses_all_valid_lines():
         ]
         write_lines(error_log, entries)
 
-        with patch("app.data.log_reader.ERROR_LOG", error_log):
+        #Patch log path and read entries
+        with patch("app.logs.log_reader.ERROR_LOG", error_log):
             logs = read_error_logs()
 
         assert len(logs) == 2
         assert logs[0]["error_type"] == "ValidationError"
 
-def test_get_log_statistics_by_type_returns_aggregates():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        data_log = os.path.join(tmpdir, "data.jsonl")
-        entries = [
-            {"log_type": "register_query", "cost": 2.5, "log_duration_sec": 1.0},
-            {"log_type": "register_query", "cost": 3.5, "log_duration_sec": 2.0},
-            {"log_type": "register_query", "cost": "invalid", "log_duration_sec": "invalid"},
-            {"log_type": "embedding", "cost": 1.0, "log_duration_sec": 0.5},
-        ]
-        write_lines(data_log, entries)
-
-        with patch("app.data.log_reader.DATA_LOG", data_log):
-            stats = get_log_statistics_by_type()
-
-        reg_stats = stats["register_query"]
-        assert reg_stats["total_cost"] == 6.0
-        assert round(reg_stats["avg_cost"], 2) == 2.0
-        assert reg_stats["count"] == 3
-        assert isinstance(reg_stats["df"], pd.DataFrame)
+def test_read_error_logs_returns_empty_list_if_missing():
+    """
+    Test that reading from a nonexistent error log file returns an empty list.
+    """
+    with patch("app.logs.log_reader.ERROR_LOG", "/non/existent/path.jsonl"):
+        logs = read_error_logs()
+        assert logs == []
