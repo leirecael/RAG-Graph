@@ -13,12 +13,8 @@ async def test_validate_question_invalid():
     question = "What is the weather in Paris?"
     response, cost = await validate_question(question)
 
-    response_dict = json.loads(response)
-    response_obj = Question.model_validate(response_dict)
-
-    assert isinstance(response_obj, Question)
-    assert response_obj.is_valid is False
-    assert isinstance(response_obj.reasoning, str)
+    assert response.is_valid is False
+    assert isinstance(response.reasoning, str)
     assert isinstance(cost, float)
 
 @pytest.mark.asyncio
@@ -29,12 +25,8 @@ async def test_validate_question_valid():
     question = "How can we address climate change?"
     response, cost = await validate_question(question)
 
-    response_dict = json.loads(response)
-    response_obj = Question.model_validate(response_dict)
-
-    assert isinstance(response_obj, Question)
-    assert response_obj.is_valid is True
-    assert response_obj.reasoning is None
+    assert response.is_valid is True
+    assert response.reasoning is None
     assert isinstance(cost, float)
 
 @pytest.mark.asyncio
@@ -45,9 +37,8 @@ async def test_validate_question_spelling_correction():
     question = "Hw cn featre modelz help?"
     response, _ = await validate_question(question)
 
-    response_obj = Question.model_validate(json.loads(response))
-    assert response_obj.is_valid is True
-    assert response_obj.value != question 
+    assert response.is_valid is True
+    assert response.value != question 
 
 #----------extract_entities---------
 @pytest.mark.asyncio
@@ -58,11 +49,7 @@ async def test_extract_entities_basic():
     question = "What problems do developers face?"
     response, cost = await extract_entities(question)
 
-    response_dict = json.loads(response)
-    response_obj = EntityList.model_validate(response_dict)
-
-    assert isinstance(response_obj, EntityList)
-    entity_types = [e.type for e in response_obj.entities]
+    entity_types = [e.type for e in response.entities]
     assert "stakeholder" in entity_types
     assert "problem" in entity_types
     assert isinstance(cost, float)
@@ -75,10 +62,7 @@ async def test_extract_entities_none():
     question = "What's the weather today?"
     response, _ = await extract_entities(question)
 
-    response_dict = json.loads(response)
-    response_obj = EntityList.model_validate(response_dict)
-
-    assert response_obj.entities == []
+    assert response.entities == []
 
 @pytest.mark.asyncio
 async def test_extract_entities_with_null_values():
@@ -88,11 +72,8 @@ async def test_extract_entities_with_null_values():
     question = "What problems are solved by the same artifact?"
     response, _ = await extract_entities(question)
 
-    response_dict = json.loads(response)
-    response_obj = EntityList.model_validate(response_dict)
-
-    problem = [e for e in response_obj.entities if e.type == "problem"]
-    artifactClass = [e for e in response_obj.entities if e.type == "problem"]
+    problem = [e for e in response.entities if e.type == "problem"]
+    artifactClass = [e for e in response.entities if e.type == "problem"]
     assert (p.value is None for p in problem)
     assert (a.value is None for a in artifactClass)
 

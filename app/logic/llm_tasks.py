@@ -1,8 +1,9 @@
 import asyncio
 from llm.llm_client import call_llm, call_llm_structured, get_embedding
-from models.entity import Entity
+from models.entity import Entity, EntityList
+from models.question import Question
 
-async def validate_question(question: str)->tuple[str, float]:
+async def validate_question(question: str)->tuple[Question, float]:
     """
     Validate if the question is research/technical in nature and safe.
     
@@ -10,7 +11,7 @@ async def validate_question(question: str)->tuple[str, float]:
         question (str): The input user question.
         
     Returns:
-        tuple[str, float]: A JSON string with the structured quesion validation, and the LLM API cost.
+        tuple[Question, float]: A Quesion object with the structured quesion validation, and the LLM API cost.
     """
 
     #Build system and user prompts for LLM
@@ -54,7 +55,7 @@ async def validate_question(question: str)->tuple[str, float]:
 
     return response, cost
 
-async def extract_entities(question: str) -> tuple[str, float]:
+async def extract_entities(question: str) -> tuple[EntityList, float]:
     """
     Extract entities from a user question based on the database schema.
     
@@ -62,7 +63,7 @@ async def extract_entities(question: str) -> tuple[str, float]:
         question (str): The input question.
         
     Returns:
-        tuple[str, float]: A JSON list of entities and the LLM API cost.
+        tuple[EntityList, float]: A EntityList object that is a list of entities and the LLM API cost.
     """
 
     #Build system and user prompts for LLM
@@ -109,7 +110,8 @@ async def extract_entities(question: str) -> tuple[str, float]:
         {question}
     """
     #Call structured LLM to extract entities, ask for the EntityList model as return output(text_format)
-    response, cost = await call_llm_structured(prompt, system_prompt, text_format="entitylist", task_name="entity_extraction") 
+    response, cost = await call_llm_structured(prompt, system_prompt, text_format="entitylist", task_name="entity_extraction")
+
     return response, cost
 
 async def generate_entity_embeddings(entities: list[Entity])->tuple[list[Entity], float]:

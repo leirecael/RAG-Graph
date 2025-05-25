@@ -79,9 +79,8 @@ async def process_question(userQuestion: str) -> str:
 
     #1. Validate the question
     try:      
-        validation, cost =  await validate_question(sanitized_question)
-        question = Question.model_validate(json.loads(validation))
-
+        question, cost =  await validate_question(sanitized_question)
+        
         # If validation fails, log the error and inform the user
         if not question.is_valid:           
             log_error("InvalidQuestion", {
@@ -100,8 +99,7 @@ async def process_question(userQuestion: str) -> str:
     
     #2. Extract entities from the question
     try:
-        entities, cost = await extract_entities(question.value)
-        extracted_entities = EntityList.model_validate(json.loads(entities))
+        extracted_entities, cost = await extract_entities(question.value)
         
     except Exception as e:
         log_error("EntityExtractionError", {

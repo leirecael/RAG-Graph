@@ -17,7 +17,6 @@ MODEL_INFO = {
     "gpt-4.1-mini": {"input_price": 0.0004, "output_price": 0.0016, "max_context": 1047576, "max_output":32768, "encoding":"o200k_base"},
     "gpt-4.1-nano": {"input_price": 0.0001, "output_price": 0.0004, "max_context": 1047576, "max_output":32768, "encoding":"o200k_base"},
     "gpt-4.1": {"input_price": 0.002, "output_price": 0.008, "max_context": 1047576, "max_output":32768, "encoding":"o200k_base"},
-    "gpt-3.5-turbo": {"input_price": 0.0005, "output_price": 0.0015, "max_context": 16385, "max_output":4096, "encoding":"cl100k_base"},
     "text-embedding-3-small": 0.00002,
     "text-embedding-3-large": 0.00013
 }
@@ -61,6 +60,7 @@ async def call_llm(user_prompt:str, system_prompt:str, model:str="gpt-4.1", temp
 
     input_tokens = response.usage.input_tokens
     output_tokens = response.usage.output_tokens
+
     cost = calculate_token_cost(model,input_tokens, output_tokens)
     duration_sec = time.time() - start_time
 
@@ -84,7 +84,7 @@ async def call_llm(user_prompt:str, system_prompt:str, model:str="gpt-4.1", temp
     })
     return response.output_text, cost
 
-async def call_llm_structured(user_prompt: str, system_prompt:str, text_format:str, model:str ="gpt-4.1", temperature:float=0.7, task_name:str = None)->tuple[str, float]:
+async def call_llm_structured(user_prompt: str, system_prompt:str, text_format:str, model:str ="gpt-4.1", temperature:float=0.7, task_name:str = None)->tuple[Question|EntityList, float]:
     """
     Calls an OpenAI LLM with structured output parsing.
 
@@ -97,7 +97,7 @@ async def call_llm_structured(user_prompt: str, system_prompt:str, text_format:s
         task_name (str, optional): Logging task name.
 
     Returns:
-        tuple[str, float]: Structured model response content and its cost.
+        tuple[Question|EntityList, float]: Structured model response and its cost.
     """
     start_time = time.time()
     if model not in MODEL_INFO:
@@ -107,18 +107,18 @@ async def call_llm_structured(user_prompt: str, system_prompt:str, text_format:s
     max_tokens= MODEL_INFO[model]["max_context"] - MODEL_INFO[model]["max_output"]
     truncated_prompt, truncated = truncate_prompt(user_prompt, MODEL_INFO[model]["encoding"], max_tokens)
 
-    response = await client.beta.chat.completions.parse(
+    response = await client.responses.parse(
         model=model,
-        messages=[
+        input=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": truncated_prompt}
         ],
         temperature=temperature,
-        response_format=RESPONSE_FORMAT[text_format]
+        text_format=RESPONSE_FORMAT[text_format]
     )
 
-    input_tokens = response.usage.prompt_tokens
-    output_tokens = response.usage.completion_tokens
+    input_tokens = response.usage.input_tokens
+    output_tokens = response.usage.output_tokens
     cost = calculate_token_cost(model,input_tokens, output_tokens)
     duration_sec = time.time() - start_time   
 
@@ -130,7 +130,7 @@ async def call_llm_structured(user_prompt: str, system_prompt:str, text_format:s
         "model": model,
         "system_prompt": system_prompt,
         "user_prompt": truncated_prompt,
-        "response": response.choices[0].message.content,
+        "response": response.output_parsed.json(),
         "truncated": truncated,
         "temperature": temperature,
         "tokens": {
@@ -140,7 +140,8 @@ async def call_llm_structured(user_prompt: str, system_prompt:str, text_format:s
         "cost": cost,
         "log_duration_sec": duration_sec
     })
-    return response.choices[0].message.content, cost
+    
+    return response.output_parsed, cost
 
 async def get_embedding(text:str, model:str="text-embedding-3-large", task_name:str = None)->tuple[list[float],float]:
     """

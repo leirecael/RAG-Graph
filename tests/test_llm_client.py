@@ -47,7 +47,7 @@ def test_calculate_token_cost_wrong_tokens():
         - Must not pass total_tokens to a non-embedding model.
     """
     with pytest.raises(ValueError):
-        calculate_token_cost("gpt-3.5-turbo", input_tokens=100) #Must have output_token
+        calculate_token_cost("gpt-4.1-nano", input_tokens=100) #Must have output_token
     with pytest.raises(ValueError):
         calculate_token_cost("gpt-4.1", total_tokens=100) #Cannot use total_tokens
 
@@ -61,7 +61,7 @@ def test_truncate_prompt_within_limit():
         - 'truncated' flag is False.
     """
     short_prompt = "Short text"
-    encoding = MODEL_INFO["gpt-3.5-turbo"]["encoding"]
+    encoding = MODEL_INFO["gpt-4.1-nano"]["encoding"]
     result, truncated = truncate_prompt(short_prompt, encoding, max_tokens=100)
 
     assert result == short_prompt
@@ -78,7 +78,7 @@ def test_truncate_prompt_exceeds_limit():
         - Output is a string.
     """
     long_prompt = "long text " * 2000
-    encoding_name = MODEL_INFO["gpt-3.5-turbo"]["encoding"]
+    encoding_name = MODEL_INFO["gpt-4.1-nano"]["encoding"]
     encoding = tiktoken.get_encoding(encoding_name)
 
     result, truncated = truncate_prompt(long_prompt, encoding_name, max_tokens=10)
