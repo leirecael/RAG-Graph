@@ -11,7 +11,7 @@ async def start_interface() -> None:
     This interface provides four main functionalities accessible through a sidebar:
         1. Queries: Submit natural language questions and get answers via the RAG backend.
         2. History: View a session-based history of previously asked questions and their responses.
-        3. Logs: Explore backend system logs, categorized by type (e.g., queries, LLM calls, errors).
+        3. Logs: View backend system logs, categorized by type (e.g., queries, LLM calls, errors).
         4. Statistics: Visual analysis and metrics based on log data, including costs and duration.
     """
     try:
@@ -44,7 +44,7 @@ async def start_interface() -> None:
                 - "What problems are related?"
                 - "What are the main challenges in software architecture?"
                 - "How many stakeholders are affected by the lack of software evolution history?"
-                - "How to address the lack of flexibility in model variants to enchance model variants comparison that happens in EMF-based model variants?"
+                - "How to address the lack of flexibility in model variants to enhance model variants comparison that happens in EMF-based model variants?"
             """)
 
             #Initialize history in session if not already present

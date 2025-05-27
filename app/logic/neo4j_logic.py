@@ -52,7 +52,7 @@ def parse_similarity_results(results: list[dict]) -> dict:
         results (list[dict]): List of result dicts returned from Neo4j APOC cypher calls.
 
     Returns:
-        dict: Mapping from entity type to list of similar node names. (e.g. {"problem": ["world hunger"], "goal": ["enchance food production", "improve agriculture technology"]})
+        dict: Mapping from entity type to list of similar node names. (e.g. {"problem": ["world hunger"], "goal": ["enhance food production", "improve agriculture technology"]})
     """
     parsed = {}
     for item in results:

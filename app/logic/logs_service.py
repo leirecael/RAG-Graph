@@ -30,7 +30,7 @@ def get_log_statistics_by_type() -> dict:
     Computes statistics for each type of log type and task.
 
     Returns:
-        dict: A dictionary containing statistics for each log type, including:
+        dict: A dictionary containing statistics for each log type and for each log type its log tasks, including:
             - total_cost: Sum of cost for logs/tasks that include a 'cost' field.
             - avg_cost: Average cost of logs/tasks with a 'cost' field.
             - avg_duration_s: Average duration in seconds for logs/tasks with a 'log_duration_sec' field.

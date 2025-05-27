@@ -46,13 +46,14 @@ async def process_question(userQuestion: str) -> str:
     using only the information contained in the graph database.
 
     This function performs several tasks:
-    1. Validates the user question.
-    2. Extracts entities from the validated question.
-    3. Generates embeddings for those entities.
-    4. Does a similarity search in the database.
-    5. Generates a Cypher query to retrieve relevant data from the database.
-    6. Executes the query and parses the results.
-    7. Generates a natural language response based on the retrieved information.
+    1. Blocks personal information and sanitizes the input.
+    2. Validates the user question.
+    3. Extracts entities from the validated question.
+    4. Generates embeddings for those entities.
+    5. Does a similarity search in the database.
+    6. Generates a Cypher query to retrieve relevant data from the database.
+    7. Executes the query and parses the results.
+    8. Generates a natural language response based on the retrieved information.
 
     Caches results using AsyncTTL with a 1-hour TTL and a maximum size of 1024 entries.
 
@@ -60,11 +61,12 @@ async def process_question(userQuestion: str) -> str:
         userQuestion (str): The question asked by the user.
 
     Returns:
-        str: Final answer generated based on the retreieved data or an error message.
+        str: Final answer generated based on the retrieved data or an error message.
     """
     start = time.time()
     total_cost = 0
 
+    #1. Block personal information and sanitize the input.
     #Check if the questions contains PII
     if contains_pii(userQuestion):
         log_error("InvalidQuestionPII", {
@@ -77,7 +79,7 @@ async def process_question(userQuestion: str) -> str:
     if len(sanitized_question) == 0:
         return "Invalid question, try again."
 
-    #1. Validate the question
+    #2. Validate the question
     try:      
         question, cost =  await validate_question(sanitized_question)
         
@@ -97,7 +99,7 @@ async def process_question(userQuestion: str) -> str:
         raise
     total_cost +=cost
     
-    #2. Extract entities from the question
+    #3. Extract entities from the question
     try:
         extracted_entities, cost = await extract_entities(question.value)
         
@@ -109,7 +111,7 @@ async def process_question(userQuestion: str) -> str:
         raise
     total_cost +=cost
     
-    #3. Generate embeddings for the extracted entities
+    #4. Generate embeddings for the extracted entities
     try:
         extracted_entities.entities, cost = await generate_entity_embeddings(extracted_entities.entities)
 
@@ -124,7 +126,7 @@ async def process_question(userQuestion: str) -> str:
             })
             raise
     
-    #4. Do a similarity search in the database
+    #5. Do a similarity search in the database
     try:       
         if entities_with_value:
             start_sim = time.time()
@@ -170,7 +172,7 @@ async def process_question(userQuestion: str) -> str:
     for entity in entities_with_no_value:
         all_relevant_nodes[entity.type] = None
 
-    #5. Generate a Cypher query based on the retrieved nodes
+    #6. Generate a Cypher query based on the retrieved nodes
     try:
         cypher_query, cost = await create_cypher_query(question.value, all_relevant_nodes)
     except Exception as e:
@@ -182,7 +184,7 @@ async def process_question(userQuestion: str) -> str:
             raise
     total_cost +=cost
 
-    #6. Execute the Cypher query and parse the results
+    #7. Execute the Cypher query and parse the results
     try:
         start_db = time.time()
         db_results = execute_query(cypher_query)
@@ -215,7 +217,7 @@ async def process_question(userQuestion: str) -> str:
                 })
         return "No available information. Please, reword your question or try another one."
 
-    #7. Generate the final answer in natural languague
+    #8. Generate the final answer in natural languague
     try:
         final_answer, cost = await generate_final_answer(question.value, related_nodes)
     except Exception as e:
