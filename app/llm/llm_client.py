@@ -45,6 +45,9 @@ async def call_llm(user_prompt:str, system_prompt:str, model:str="gpt-4.1", temp
     if model not in MODEL_INFO:
         raise ValueError(f"Unknown model: {model}")
     
+    if temperature < 0.0 or temperature > 2.0:
+        raise ValueError(f"Temperatura is out of bounds (0-2): {temperature}")
+    
     #Calculate max allowed input tokens
     max_tokens= MODEL_INFO[model]["max_context"] - MODEL_INFO[model]["max_output"]
     truncated_prompt, truncated = truncate_prompt(user_prompt, MODEL_INFO[model]["encoding"], max_tokens)
@@ -103,6 +106,12 @@ async def call_llm_structured(user_prompt: str, system_prompt:str, text_format:s
     if model not in MODEL_INFO:
         raise ValueError(f"Unknown model: {model}")
     
+    if temperature < 0.0 or temperature> 2.0:
+        raise ValueError(f"Temperatura is out of bounds (0-2): {temperature}")
+    
+    if text_format not in RESPONSE_FORMAT:
+        raise ValueError(f"Unknown output format: {text_format}")
+
     #Calculate max allowed input tokens
     max_tokens= MODEL_INFO[model]["max_context"] - MODEL_INFO[model]["max_output"]
     truncated_prompt, truncated = truncate_prompt(user_prompt, MODEL_INFO[model]["encoding"], max_tokens)

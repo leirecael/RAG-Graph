@@ -1,10 +1,17 @@
 from app.logic.neo4j_logic import generate_similarity_queries, parse_similarity_results, parse_related_nodes_results, remove_duplicate_text, remove_duplicate_text_in_list
 from app.models.entity import Entity
+import pytest
 
 #-----generate_similarity_queries---------
 def test_generate_similarity_queries_single_entity():
     """
-    Test that the function creates a valid Cypher query and parameter dictionary for a single Entity input.
+    Test that generate_similarity_queries creates a valid query and params for a single Entity.
+
+    Verifies:
+        - The returned list contains one query dictionary.
+        - The query includes the embedding parameter placeholder.
+        - The query references the entity type.
+        - The embedding in params matches the input embedding.
     """
     entity = Entity(value="Problem A", type="problem", embedding=[0.1, 0.2, 0.3])
     result = generate_similarity_queries([entity])
@@ -19,8 +26,13 @@ def test_generate_similarity_queries_single_entity():
 
 def test_generate_similarity_queries_multiple_entities():
     """
-    Test that the function generates a correct query for each entity in a list of multiple Entity inputs.
-    Checks the entity type, similarity threshold, and limit per query.
+    Test that generate_similarity_queries creates correct queries for multiple Entities.
+
+    Verifies:
+        - The number of queries matches the number of entities.
+        - Each query references the corresponding entity type.
+        - The queries include the provided similarity threshold and limit.
+        - The embedding parameters match the inputs.
     """
     entities = [
         Entity(value="Goal A", type="goal", embedding=[0.2, 0.4, 0.6]),
@@ -32,20 +44,49 @@ def test_generate_similarity_queries_multiple_entities():
     for query_entry, ent in zip(result, entities):
         assert ent.type in query_entry["query"]
         assert query_entry["params"]["embedding"] == ent.embedding
-        assert "LIMIT 5" in query_entry["query"]
-        assert f"WHERE similarity >= 0.7" in query_entry["query"]
+        assert query_entry["params"]["top_k"] == 5
+        assert query_entry["params"]["threshold"] == 0.7
 
 def test_generate_similarity_queries_empty_input():
     """
-    Test that passing an empty list of entities returns an empty list of queries.
+    Test that generate_similarity_queries returns an empty list when given no entities.
+
+    Verifies:
+        - The function safely returns an empty list with no errors.
     """
     result = generate_similarity_queries([])
     assert result == []
 
+def test_generate_similarity_queries_unknown_label():
+    """
+    Test that only the allowed labels will get into the query.
+    
+    Verifies:
+        - ValueError is raised with an unknown label.
+    """
+    #Create a fake Entity class, as the real one will not allow other type of labels.
+    class EntityFake:
+        def __init__(self, value, type, embedding):
+            self.value = value
+            self.type = type
+            self.embedding = embedding
+
+    entities = [
+        EntityFake(value="Goal A", type="FAKE", embedding=[0.2, 0.4, 0.6]),
+        EntityFake(value="Context B", type="context", embedding=[0.9, 0.1, 0.3])
+    ]
+
+    with pytest.raises(ValueError):
+        generate_similarity_queries(entities, threshold=0.7, top_k=5)
+
 #------parse_similarity_results---------
 def test_parse_similarity_results_groups_by_first_label():
     """
-    Verify that similarity results are grouped correctly by the first label in the node's label list.
+    Test that parse_similarity_results groups nodes by their first label.
+
+    Verifies:
+        - Nodes are grouped correctly by the first label in their label list.
+        - Different labels produce separate groups.
     """
     fake_results = [
         {"value": {"name": "Item A", "labels": ["goal", "secondary"]}},
@@ -63,8 +104,12 @@ def test_parse_similarity_results_groups_by_first_label():
 #------parse_related_nodes_results---------
 def test_parse_related_nodes_results_others():
     """
-    Test that 'others' values not mapped to entities are captured in the 'others' section.
-    Also verifies deduplication in lists.
+    Test that parse_related_nodes_results captures unmapped values under 'others' and deduplicates them.
+
+    Verifies:
+        - 'others' dictionary contains expected keys and values.
+        - String with ; are deduplicated.
+        - Lists are deduplicated.
     """
     fake_records = [
         {
@@ -75,7 +120,9 @@ def test_parse_related_nodes_results_others():
                 "developers",
                 "Software Engineers"
             ],
-            "labels(s)": ["stakeholder"]
+            "labels(s)": ["stakeholder"],
+            "stakeholderCount": 4,
+            "stakeholderDesc": "description;description"
         }
     ]
     result = parse_related_nodes_results(fake_records)
@@ -83,14 +130,22 @@ def test_parse_related_nodes_results_others():
     assert "others" in result
     assert isinstance(result["others"], dict)
     assert "stakeholderList" in result["others"]
+    assert "stakeholderCount" in result["others"]
+    assert result["others"]["stakeholderCount"] == 4
+    assert "stakeholderDesc" in result["others"]
+    assert result["others"]["stakeholderDesc"] == "description"
     non_dup = result["others"]["stakeholderList"]
 
-    # Expected list without duplicates, case-insensitive
+    # Expected list without duplicates
     assert sorted(non_dup) == sorted(["developers", "software engineers"])
 
 def test_parse_related_nodes_results_others_with_semicolon_lists():
     """
-    Test deduplication and normalization of semicolon-separated items in string lists in the 'others' section.
+    Test that semicolon-separated string lists under 'others' are normalized and deduplicated.
+
+    Verifies:
+        - Strings are split on semicolons, trimmed, and duplicates removed.
+        - Normalized strings are joined back with semicolons and no extra spaces.
     """
     fake_records = [
         {
@@ -106,7 +161,10 @@ def test_parse_related_nodes_results_others_with_semicolon_lists():
 
 def test_parse_related_nodes_results_with_missing_fields():
     """
-    Ensure the parser handles missing optional fields like description and hypernym.
+    Test that parse_related_nodes_results handles missing optional fields gracefully.
+
+    Verifies:
+        - Missing 'description' and 'hypernym' fields default to empty strings.
     """
     fake_records = [
         {
@@ -123,7 +181,10 @@ def test_parse_related_nodes_results_with_missing_fields():
 
 def test_parse_related_nodes_results_with_multiple_labels():
     """
-    Test that a node with multiple valid labels is added to at least one appropriate entity category.
+    Test that nodes with multiple valid labels are included in appropriate entity groups.
+
+    Verifies:
+        - The node appears under at least one valid category.
     """
     fake_records = [
         {
@@ -138,7 +199,11 @@ def test_parse_related_nodes_results_with_multiple_labels():
 
 def test_parse_related_nodes_results_basic_case():
     """
-    Full-flow test parsing problems and contexts and verifying relationship types like 'arisesAt'.
+    Test that parse_related_nodes_results parses problems, contexts, and their relationships correctly.
+
+    Verifies:
+        - Problems and contexts are included in entities.
+        - Relationships like 'arisesAt' exist linking the correct nodes.
     """
     fake_records = [
         {
@@ -168,7 +233,11 @@ def test_parse_related_nodes_results_basic_case():
 
 def test_parse_related_nodes_results_ignores_unknown_labels():
     """
-    Ensure that nodes with unknown labels are ignored and not added to entity maps.
+    Test that nodes with unknown labels are ignored.
+
+    Verifies:
+        - Entities dictionaries are empty.
+        - No relationships are returned.
     """
     fake_records = [
         {
@@ -183,7 +252,10 @@ def test_parse_related_nodes_results_ignores_unknown_labels():
 
 def test_parse_related_nodes_results_no_duplicates_in_relationships():
     """
-    Ensure that duplicate node pairs do not result in duplicate relationships in the output.
+    Test that duplicate node pairs do not cause duplicate relationships.
+
+    Verifies:
+        - Relationships list contains no duplicates for the same node pairs.
     """
     fake_records = [
         {
@@ -209,7 +281,10 @@ def test_parse_related_nodes_results_no_duplicates_in_relationships():
 
 def test_parse_related_nodes_results_includes_alternative_name():
     """
-    Test that alternativeName is included when available on a node.
+    Test that alternativeName is included in entities when present.
+
+    Verifies:
+        - The alternativeName field is present and correctly set.
     """
     fake_records = [
         {
@@ -226,7 +301,11 @@ def test_parse_related_nodes_results_includes_alternative_name():
 #------remove_duplicate_text---------
 def test_remove_duplicate_text_normalization():
     """
-    Verify semicolon-separated text is deduplicated and normalized for spacing and case.
+    Test that remove_duplicate_text normalizes and deduplicates semicolon-separated strings.
+
+    Verifies:
+        - Duplicate segments are removed case-insensitively.
+        - The output string is trimmed and normalized without trailing semicolons.
     """
     text = "Improves efficiency; improves efficiency ;   Security ; security ;"
     cleaned = remove_duplicate_text(text)
@@ -236,7 +315,11 @@ def test_remove_duplicate_text_normalization():
 #------remove_duplicate_text_in_list--------
 def test_remove_duplicate_text_in_list_deduplicates_case_insensitive():
     """
-    Test that the list deduplication function removes case-insensitive duplicates.
+    Test that remove_duplicate_text_in_list removes duplicates from a list case-insensitively.
+
+    Verifies:
+        - Case-insensitive duplicates are removed.
+        - The original order of first occurrences is preserved.
     """
     input_data = ["Security", "security", "SECURITY", "Efficiency", "efficiency "]
     cleaned = remove_duplicate_text_in_list(input_data)

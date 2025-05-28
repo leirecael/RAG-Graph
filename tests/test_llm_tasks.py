@@ -8,7 +8,12 @@ import json
 @pytest.mark.asyncio
 async def test_validate_question_invalid():
     """
-    Test that a question outside the domain (e.g. about weather) is marked as invalid.
+    Test that a question outside the domain (e.g., about the weather) is marked as invalid.
+
+    Verifies:
+        - The question is flagged as invalid.
+        - A reasoning message is returned.
+        - The cost is calculated and returned as a float.
     """
     question = "What is the weather in Paris?"
     response, cost = await validate_question(question)
@@ -20,7 +25,12 @@ async def test_validate_question_invalid():
 @pytest.mark.asyncio
 async def test_validate_question_valid():
     """
-    Test that a question inside the domain is marked as valid.
+    Test that a relevant, domain-specific question is marked as valid.
+
+    Verifies:
+        - The question is marked as valid.
+        - No reasoning is returned.
+        - The cost is returned as a float.
     """
     question = "How can we address climate change?"
     response, cost = await validate_question(question)
@@ -32,7 +42,11 @@ async def test_validate_question_valid():
 @pytest.mark.asyncio
 async def test_validate_question_spelling_correction():
     """
-    Test that the validator corrects poorly spelled questions.
+    Test that the validator corrects poorly written questions.
+
+    Verifies:
+        - The corrected question is considered valid.
+        - The output question is different from the input.
     """
     question = "Hw cn featre modelz help?"
     response, _ = await validate_question(question)
@@ -44,7 +58,11 @@ async def test_validate_question_spelling_correction():
 @pytest.mark.asyncio
 async def test_extract_entities_basic():
     """
-    Test that basic entities are correctly extracted.
+    Test that common entities are extracted from a basic question.
+
+    Verifies:
+        - Entities like 'stakeholder' and 'problem' are correctly identified.
+        - The cost is returned as a float.
     """
     question = "What problems do developers face?"
     response, cost = await extract_entities(question)
@@ -57,7 +75,10 @@ async def test_extract_entities_basic():
 @pytest.mark.asyncio
 async def test_extract_entities_none():
     """
-    Test that irrelevant questions return no entities.
+    Test that unrelated questions return no entities.
+
+    Verifies:
+        - The list of entities is empty.
     """
     question = "What's the weather today?"
     response, _ = await extract_entities(question)
@@ -67,7 +88,11 @@ async def test_extract_entities_none():
 @pytest.mark.asyncio
 async def test_extract_entities_with_null_values():
     """
-    Test that entity values can be None when they are abstract or implicit.
+    Test that entities can have None as their value when abstract or implied.
+
+    Verifies:
+        - Entities may have a value of None.
+        - No error occurs when handling these entities.
     """
     question = "What problems are solved by the same artifact?"
     response, _ = await extract_entities(question)
@@ -81,8 +106,11 @@ async def test_extract_entities_with_null_values():
 @pytest.mark.asyncio
 async def test_generate_entity_embeddings_with_valid_entities():
     """
-    Test function with a list of valid entities.
-    Embeddings should be assigned and total cost > 0.
+    Test that valid entities receive embeddings and that the total cost is greater than zero.
+
+    Verifies:
+        - Each entity with a value gets an embedding (a list of floats).
+        - Total cost is greater than 0.
     """
     entities = [Entity(value="AI", type=EntityEnum.context, embedding=None), Entity(value="developers", type=EntityEnum.stakeholder, embedding=None)]
 
@@ -99,8 +127,12 @@ async def test_generate_entity_embeddings_with_valid_entities():
 @pytest.mark.asyncio
 async def test_generate_entity_embeddings_with_none_values():
     """
-    Test function when some entities have None values.
-    Only entities with actual values should get embeddings.
+    Test that only entities with values get embeddings.
+
+    Verifies:
+        - Entities without a value get no embedding.
+        - Other entities do get embeddings.
+        - The cost reflects only the valid ones.
     """
     entities = [Entity(value="AI", type=EntityEnum.context, embedding=None), Entity(value=None, type=EntityEnum.problem, embedding=None)]
 
@@ -113,8 +145,11 @@ async def test_generate_entity_embeddings_with_none_values():
 @pytest.mark.asyncio
 async def test_generate_entity_embeddings_empty_list():
     """
-    Test function with an empty list.
-    Should return empty list and zero cost.
+    Test that an empty input list returns no embeddings and zero cost.
+
+    Verifies:
+        - Output list is empty.
+        - Total cost is 0.
     """
     updated_entities, total_cost = await generate_entity_embeddings([])
 
@@ -124,10 +159,13 @@ async def test_generate_entity_embeddings_empty_list():
 #--------create_cypher_query----------
 def validate_cypher_format(query: str):
     """
-    Validates that a Cypher query follow the rules and is formated correctly.
+    Validate the structure of a generated Cypher query.
 
-    Args:
-        query (str): The cypher query that need validation.
+    Verifies:
+        - Query is a string.
+        - Contains 'MATCH' and 'RETURN'.
+        - Parentheses are balanced.
+        - Does not contain forbidden clauses like CREATE, DELETE, SET, or MERGE.
     """
     assert isinstance(query,str), "Query must be a string"
     assert "MATCH" in query.upper(), "Must contain MATCH"
@@ -143,7 +181,12 @@ def validate_cypher_format(query: str):
 @pytest.mark.asyncio
 async def test_create_cypher_query_basic_call():
     """
-    Test Cypher generation for a valid question and nodes.
+    Test Cypher generation for a valid question and multiple node values.
+
+    Verifies:
+        - The generated query follows the expected Cypher format.
+        - The query includes the required MATCH and RETURN clauses.
+        - The cost of generation is greater than zero.
     """
     question = "Can problems A and B be addressed by X?"
     nodes = {
@@ -159,7 +202,11 @@ async def test_create_cypher_query_basic_call():
 @pytest.mark.asyncio
 async def test_create_cypher_query_empty_nodes():
     """
-    Test Cypher generation with no available nodes.
+    Test behavior when no nodes are provided.
+
+    Verifies:
+        - The generated query is empty.
+        - No Cypher logic is attempted without nodes.
     """
     question = "What problems are addressed by the same artifactClass?"
     nodes = {}
@@ -169,7 +216,12 @@ async def test_create_cypher_query_empty_nodes():
 @pytest.mark.asyncio
 async def test_create_cypher_query_nodes_with_none_values():
     """
-    Test Cypher generation when node values are None.
+    Test Cypher generation when some node values are None.
+
+    Verifies:
+        - A query is still generated.
+        - Entities with None are represented with 'IS NOT NULL'.
+        - The query passes format validation.
     """
     question = "Which goals are achieved?"
     nodes = {"goal": None, "requirement": None}
@@ -180,7 +232,11 @@ async def test_create_cypher_query_nodes_with_none_values():
 @pytest.mark.asyncio
 async def test_create_cypher_query_special_characters():
     """
-    Test Cypher generation with special characters in node names.
+    Test Cypher generation with special characters in node values.
+
+    Verifies:
+        - Query includes entities with special characters without failure.
+        - The query passes format validation.
     """
     question = "How does problem @#$%^ relate to others?"
     nodes = {"problem": ["@#$%^", "Problem (X)"]}
@@ -190,7 +246,11 @@ async def test_create_cypher_query_special_characters():
 @pytest.mark.asyncio
 async def test_create_cypher_query_no_list():
     """
-    Test Cypher generation when node value is a string instead of a list.
+    Test behavior when a node has a single string value instead of a list.
+
+    Verifies:
+        - The single string value is accepted and processed.
+        - The resulting query is valid and well-formed.
     """
     question = "What are the problems?"
     nodes = {"problem": "valueA"}
@@ -200,7 +260,13 @@ async def test_create_cypher_query_no_list():
 #--------enrich_prompt----------
 def test_enrich_prompt_basic_structure():
     """
-    Test prompt enrichment for a standard context with entities, relationships and others.
+    Test prompt enrichment with a full context including entities, relationships, and others.
+
+    Verifies:
+        - The question appears in the prompt.
+        - Entities include names, descriptions, labels, and hypernyms.
+        - Relationships are correctly formatted.
+        - Other context fields (e.g., notes) are included in the prompt.
     """
     question = "What problems affect users?"
     context = {
@@ -247,7 +313,11 @@ def test_enrich_prompt_basic_structure():
 
 def test_enrich_prompt_with_alternative_name():
     """
-    Test that prompt includes alternative names for entities if present.
+    Test inclusion of alternative names in the enriched prompt.
+
+    Verifies:
+        - Entities with 'alternativeName' include that alias in the formatted output.
+        - Descriptions and hypernyms are correctly shown.
     """
     question = "Explain problem aliases"
     context = {
@@ -271,7 +341,11 @@ def test_enrich_prompt_with_alternative_name():
 
 def test_enrich_prompt_with_missing_fields():
     """
-    Test that missing or empty fields do not break prompt generation.
+    Test prompt generation when entity fields like description or labels are empty.
+
+    Verifies:
+        - Prompt generation handles missing or empty fields without error.
+        - Fields appear in output with default/empty values where appropriate.
     """
     question = "Test missing fields"
     context = {
@@ -295,7 +369,11 @@ def test_enrich_prompt_with_missing_fields():
 
 def test_enrich_prompt_ignores_empty_entity_categories():
     """
-    Test that empty entity types are not included in the prompt.
+    Test that empty entity groups are excluded from the prompt.
+
+    Verifies:
+        - Entity categories with no items are omitted.
+        - The prompt includes only relevant sections like relationships or non-empty categories.
     """
     question = "What is missing?"
     context = {
@@ -315,7 +393,12 @@ def test_enrich_prompt_ignores_empty_entity_categories():
 
 def test_enrich_prompt_multiple_entities_and_relationships():
     """
-    Test full prompt generation with multiple entities and relationships.
+    Test full prompt generation with multiple types of entities and multiple relationships.
+
+    Verifies:
+        - All entity categories appear with expected content.
+        - Multiple relationships are formatted and included correctly.
+        - Hypernyms, descriptions, and labels appear for each entity.
     """
     question = "How do problems relate to goals in context A?"
     context = {

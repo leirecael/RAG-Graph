@@ -6,6 +6,11 @@ def test_execute_query_basic_return():
     """
     Test whether the database returns a valid 'total_nodes'.
     Ensures that the database connection and query execution work.
+
+    Verifies:
+        - The query returns exactly one result.
+        - The result contains the 'total_nodes' key.
+        - The value of 'total_nodes' is an integer.
     """
     result = execute_query("MATCH (n) RETURN COUNT(n) AS total_nodes")
 
@@ -17,6 +22,11 @@ def test_execute_query_specific_nodes():
     """
     Test querying a limited number of nodes with the 'problem' label.
     Ensures that the returned names are valid strings.
+
+    Verifies:
+        - Result is a list.
+        - Each record contains a 'name' key.
+        - Each 'name' value is a string.
     """
     query = """
     MATCH (p:problem)
@@ -36,6 +46,11 @@ def test_execute_multiple_read_only_queries():
     """
     Test executing multiple read-only Cypher queries using APOC.
     Checks that the results include correct fields and expected types.
+
+    Verifies:
+        - The result is a list with expected number of elements.
+        - Each element has a 'value' key containing expected data.
+        - The types and keys in the nested dictionaries match expectations.
     """
     queries = [
         {
@@ -70,6 +85,11 @@ def test_execute_multiple_queries_with_params():
     """
     Test executing multiple parameterized queries using APOC.
     Verifies correct result mapping and type for known node names.
+
+    Verifies:
+        - Result list length matches query count.
+        - Each result contains expected keys and values.
+        - Returned values match the parameterized input queries.
     """
     queries = [
         {

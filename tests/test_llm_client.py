@@ -87,3 +87,56 @@ def test_truncate_prompt_exceeds_limit():
     assert isinstance(result, str)
     assert token_count == 10 
     assert truncated is True
+
+#-----call_llm------
+@pytest.mark.asyncio
+async def test_call_llm_raises_value_errors(): 
+    """
+    Test that the expected errors are raised.
+
+    Verifies:
+        - Unknown model raises ValueError
+        - Temperature above 2 raises ValueError
+    """
+    prompt = "Hello"
+    system_prompt="Greetings"
+    
+    with pytest.raises(ValueError):
+        await call_llm(prompt, system_prompt, "unknown model")
+    with pytest.raises(ValueError):
+        await call_llm(prompt, system_prompt, temperature=3.0)
+
+#-----call_llm_structured------
+@pytest.mark.asyncio
+async def test_call_llm_structured_raises_value_errors(): 
+    """
+    Test that the expected errors are raised.
+
+    Verifies:
+        - Unknown model raises ValueError
+        - Temperature below 0 raises ValueError
+        - Unknown text format raises ValueError
+    """
+    prompt = "Hello"
+    system_prompt="Greetings"
+    
+    with pytest.raises(ValueError):
+        await call_llm_structured(prompt, system_prompt, text_format="question", model="unknown model 2")
+    with pytest.raises(ValueError):
+        await call_llm_structured(prompt, system_prompt, text_format="question", temperature=-3.0)
+    with pytest.raises(ValueError):
+        await call_llm_structured(prompt, system_prompt, text_format="unknown")
+
+#-----get_embedding------
+@pytest.mark.asyncio
+async def test_get_embedding_raises_value_errors():
+    """
+    Test that the expected errors are raised.
+
+    Verifies:
+        - Unknown model raises ValueError
+    """ 
+    prompt="Text"
+
+    with pytest.raises(ValueError):
+        await get_embedding(prompt, model="unknown")

@@ -9,3 +9,4 @@ pytest-asyncio==0.26.0
 pytest-mock==3.14.0
 presidio_analyzer==2.2.358
 async-cache==1.1.1
+coverage==7.8.2

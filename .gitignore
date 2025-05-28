@@ -3,3 +3,4 @@
 /app/config/.env
 .pytest_cache
 app/logs/*.jsonl
+.coverage

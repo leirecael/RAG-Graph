@@ -58,8 +58,6 @@ def parse_similarity_results(results: list[dict]) -> dict:
     for item in results:
         data = item["value"]  #Contains 'name', 'similarity', 'labels'
         labels = data.get("labels", [])
-        if not labels:
-            continue  
         
         primary_label = labels[0]  #Use the first label
         if primary_label not in parsed:

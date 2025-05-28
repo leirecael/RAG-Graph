@@ -5,6 +5,12 @@ from app.logic.logs_service import get_logs, get_log_statistics_by_type
 def test_get_log_statistics_by_type_with_valid_data():
     """
     Test that statistics are correctly aggregated for a log type with valid cost and duration fields.
+
+    Verifies:
+        - Total cost is correctly summed.
+        - Average cost and duration are computed correctly.
+        - Count matches the number of log entries.
+        - The returned data frame is a pandas DataFrame instance.
     """
     entries = [
         {"log_type": "register_query", "cost": 2.5, "log_duration_sec": 1.0},
@@ -25,6 +31,11 @@ def test_get_log_statistics_by_type_with_valid_data():
 def test_get_logs_returns_correct_structure():
     """
     Test that get_logs correctly categorizes log entries by type and returns error logs as a list.
+
+    Verifies:
+        - Logs are categorized into known types only.
+        - Logs with unknown types are excluded.
+        - Error logs are returned unchanged.
     """
     data_entries = [
         {"log_type": "register_query", "info": "query1"},
@@ -51,6 +62,10 @@ def test_get_logs_returns_correct_structure():
 def test_get_log_statistics_with_missing_fields():
     """
     Test that statistics gracefully handle logs with missing 'cost' and 'log_duration_sec' fields.
+
+    Verifies:
+        - total_cost and avg_duration_s are None if missing in data.
+        - Count of logs is accurate despite missing fields.
     """
     entries = [
         {"log_type": "llm_call", "info": "call 1"},
@@ -69,6 +84,11 @@ def test_get_log_statistics_with_missing_fields():
 def test_log_statistics_ignores_non_numeric_costs_and_durations():
     """
     Test that invalid cost/duration values are coerced to NaN and handled correctly in statistics.
+
+    Verifies:
+        - Non-numeric cost and duration values do not break computation.
+        - Numeric values are summed and averaged correctly.
+        - Count reflects total entries despite invalid values.
     """
     entries = [
         {"log_type": "embedding", "cost": "abc", "log_duration_sec": "2"},
@@ -87,6 +107,11 @@ def test_log_statistics_ignores_non_numeric_costs_and_durations():
 def test_log_statistics_with_task_names():
     """
     Test that task-level statistics are generated when 'task_name' is included in log entries.
+
+    Verifies:
+        - Statistics are grouped correctly by task_name.
+        - Counts and costs per task are accurate.
+        - Task statistics exist in the returned data structure.
     """
     entries = [
         {"log_type": "embedding", "cost": 2.0, "log_duration_sec": 1.0, "task_name": "task_A"},

@@ -9,6 +9,11 @@ from app.logs.logger import log_data, log_error
 def test_log_data_basic():
     """
     Test that log_data correctly writes a dictionary as a single JSON line into the data log file.
+
+    Verifies:
+        - The function writes exactly one line to the log file.
+        - The JSON content written matches the dictionary passed in.
+        - File I/O occurs at the expected log path (patched).
     """
     #Create a temporary directory to isolate file writing
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -31,6 +36,10 @@ def test_log_data_basic():
 def test_log_data_with_empty_dict():
     """
     Test that logging an empty dictionary still writes a valid JSON line.
+
+    Verifies:
+        - A single valid JSON line representing an empty dict is written.
+        - No errors occur when logging empty data.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         data_path = os.path.join(tmpdir, "data.jsonl")
@@ -48,6 +57,10 @@ def test_log_data_with_empty_dict():
 def test_log_data_rejects_non_dict():
     """
     Ensure log_data only accepts dicts.
+
+    Verifies:
+        - Passing a non-dict raises a TypeError.
+        - Input validation is enforced.
     """
     with pytest.raises(TypeError):
         log_data("not a dict")
@@ -56,6 +69,12 @@ def test_log_data_rejects_non_dict():
 def test_log_error_basic():
     """
     Test that log_error writes a JSON line with timestamp, error type, and details into the error log file.
+
+    Verifies:
+        - Exactly one JSON line is written.
+        - The JSON includes `timestamp`, `error_type`, and `details`.
+        - The content of `error_type` and `details` matches the input.
+        - File I/O is redirected via patching.
     """
     #Create a temporary directory to isolate file writing
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -79,6 +98,12 @@ def test_log_error_basic():
 def test_log_error_with_empty_details():
     """
     Test that logging an error with an empty details dict still writes correctly.
+
+    Verifies:
+        - The log line contains the correct error_type.
+        - Details field is an empty dict as provided.
+        - Timestamp is included.
+        - No exceptions are raised.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         error_path = os.path.join(tmpdir, "errors.jsonl")
@@ -95,3 +120,17 @@ def test_log_error_with_empty_details():
         assert isinstance(data["details"], dict)
         assert data["details"] == {}
         assert "timestamp" in data
+
+def test_log_error_type_error():
+    """
+    Test that an unexpected type raises an error.
+
+    Verifies:
+        - A list instead of a dictionary raises TypeError
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        error_path = os.path.join(tmpdir, "errors.jsonl")
+
+        with patch("app.logs.logger.ERROR_LOG", error_path):
+            with pytest.raises(TypeError):
+                log_error("TypeError", [])

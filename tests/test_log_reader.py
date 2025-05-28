@@ -20,6 +20,11 @@ def write_lines(path: str, lines: list[dict]):
 def test_read_data_logs_reads_valid_lines():
     """
     Test that valid JSON entries in the data log file are read and returned correctly.
+
+    Verifies:
+        - Each valid line in the log is deserialized correctly.
+        - All entries are returned in order.
+        - The content of each entry matches the original.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         data_log = os.path.join(tmpdir, "data.jsonl")
@@ -39,6 +44,10 @@ def test_read_data_logs_reads_valid_lines():
 def test_read_data_logs_returns_empty_list_if_missing():
     """
     Test that reading from a nonexistent data log file returns an empty list.
+
+    Verifies:
+        - The function gracefully handles missing files.
+        - An empty list is returned instead of an exception.
     """
     with patch("app.logs.log_reader.DATA_LOG", "/non/existent/data.jsonl"):
         logs = read_data_logs()
@@ -48,6 +57,11 @@ def test_read_data_logs_returns_empty_list_if_missing():
 def test_read_error_logs_parses_all_valid_lines():
     """
     Test that valid JSON entries in the error log file are read correctly.
+
+    Verifies:
+        - Each valid error entry is deserialized.
+        - All expected fields (`error_type`, `details`, etc.) are preserved.
+        - Entries are returned in the order written.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         error_log = os.path.join(tmpdir, "errors.jsonl")
@@ -67,6 +81,10 @@ def test_read_error_logs_parses_all_valid_lines():
 def test_read_error_logs_returns_empty_list_if_missing():
     """
     Test that reading from a nonexistent error log file returns an empty list.
+
+    Verifies:
+        - The function handles missing file paths safely.
+        - Returns an empty list rather than raising an exception.
     """
     with patch("app.logs.log_reader.ERROR_LOG", "/non/existent/path.jsonl"):
         logs = read_error_logs()
