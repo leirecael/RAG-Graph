@@ -1,7 +1,7 @@
 from models.entity import Entity
 
 
-def generate_similarity_queries(entities_with_value: list[Entity], threshold: float = 0.6, top_k: int = 3)->list[dict]:
+def generate_similarity_queries(entities_with_value: list[Entity], threshold: float = 0.7, top_k: int = 3)->list[dict]:
     """
     Generate Cypher queries to find nodes similar to given entities based on cosine similarity of embeddings.
 
@@ -42,6 +42,43 @@ def generate_similarity_queries(entities_with_value: list[Entity], threshold: fl
             "query": query,
             "params": params
         })
+    return queries_with_params
+
+def generate_similarity_queries_no_label(entities_with_value: list[Entity], threshold: float = 0.6, top_k: int = 3) -> list[dict]:
+    """
+    Generate Cypher queries to find nodes similar to entity values, no matter the label, based on cosine similarity of embeddings.
+
+    Args:
+        entities_with_value (list[Entity]): List of Entity objects with calculated embeddings.
+        threshold (float): Minimum cosine similarity threshold to consider as valid.
+        top_k (int): Maximum number of similar nodes to return per entity.
+
+    Returns:
+        list[dict]: List of dicts with 'query' and 'params' keys for batch execution.
+    """
+    queries_with_params = []
+    for entity in entities_with_value:
+        query = f"""
+            WITH $embedding AS embedding
+            MATCH (n)
+            WHERE n.embedding IS NOT NULL
+            WITH n, gds.similarity.cosine(embedding, n.embedding) AS similarity
+            WHERE similarity >= $threshold
+            RETURN DISTINCT n.name as name, similarity, labels(n) as labels
+            ORDER BY similarity DESC
+            LIMIT $top_k
+            """
+        params = {
+                "embedding": entity.embedding,
+                "threshold": threshold,           
+                "top_k": top_k
+
+            }
+        queries_with_params.append({
+                "query": query,
+                "params": params
+        })
+
     return queries_with_params
 
 def parse_similarity_results(results: list[dict]) -> dict:
@@ -220,3 +257,4 @@ def remove_duplicate_text_in_list(items: list) -> list:
             result.append(cleaned_text)
 
     return result
+

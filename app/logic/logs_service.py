@@ -1,6 +1,6 @@
 from logs.log_reader import read_data_logs,read_error_logs
 import pandas as pd
-def get_logs()->tuple[dict,list[dict]]:
+def parse_logs()->tuple[dict,list[dict]]:
     """
     Retrieves and parses logs from the system.
 
@@ -37,7 +37,7 @@ def get_log_statistics_by_type() -> dict:
             - count: Total number of log entries of that type/task.
             - df: Original DataFrame.
     """
-    logs_by_type, _ = get_logs()
+    logs_by_type, _ = parse_logs()
     stats = {}
 
     for log_type, entries in logs_by_type.items():

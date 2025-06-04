@@ -5,7 +5,7 @@ from models.question import Question
 
 async def validate_question(question: str)->tuple[Question, float]:
     """
-    Validate if the question is research/technical in nature and safe.
+    Validate if the question is research/technical in nature and safe(not bypassing LLM, not modifying DB, etc.).
     
     Args:
         question (str): The input user question.
@@ -152,12 +152,12 @@ async def create_cypher_query(question: str, all_relevant_nodes:dict) -> tuple[s
     """
 
     #Build system and user prompts for LLM
-    system_prompt = "You are a Cypher query generator for a scientific knowledge graph. You create queries based on the user's question and available nodes given to you."
+    system_prompt = "You are a Cypher query generator for a scientific knowledge graph. You create queries based on the user's question and available nodes given to you. You are only allowed to read the database, you cannot modify it."
 
     prompt = f"""
         # TASK
         You are given a question and a set of relevant node types with optional filters.
-        Generate a syntactically and semantically correct Cypher query using the schema, following the rules and examples below. Follor the schema relationships strictly.
+        Generate a syntactically and semantically correct Cypher query using the schema, following the rules and examples below. Follow the schema relationships strictly.
         If there is no question or the available nodes dictionary is empty, return an empty string with no query.
 
         # GRAPH SCHEMA
@@ -174,12 +174,14 @@ async def create_cypher_query(question: str, all_relevant_nodes:dict) -> tuple[s
         - If the value is a list, use `name IN [...]`
         - If the value is None, filter with `name IS NOT NULL`
         - If multiple nodes of the same type are needed, use aliases like p1, p2.
-        3. Always use `WITH DISTINCT` to eliminate duplicates before RETURN.
-        4. Use `LIMIT` only when relevant.
-        5. Always return: `name`, `description`, `hypernym`, `alternativeName` and `labels(...)` for all nodes involved. For queries that need 'COUNT' or other types of functions, you can add those fucntions as extra.
-        6. Do not rename output fields. Maintain standard Cypher return format.
-        7. Only generate the Cypher query. Do not add comments or explanations.
-        8. You can traverse the graph to look for related ideas. Use all schema relationships that apply.(e.g. artifacts related by problem and requirement, goals related by requirement and problem)
+        3. Always use `WITH DISTINCT` to eliminate duplicates before RETURN with related nodes.
+        4. If the question asks about general information, relationships may not be needed.
+        5. Use `LIMIT` only when relevant.
+        6. Always return: `name`, `description`, `hypernym`, `alternativeName` and `labels(...)` for all nodes involved. For queries that need 'COUNT' or other types of functions, you can add those fucntions as extra.
+        7. Do not rename output fields. Maintain standard Cypher return format.
+        8. Only generate the Cypher query. Do not add comments or explanations.
+        9. You can traverse the graph to look for related ideas. Use all schema relationships that apply.(e.g. artifacts related by problem and requirement, goals related by requirement and problem)
+        10. If the question requires to modify the database, return an empty string of "".
 
         # EXAMPLES
         Q: What problems are solved by the same artifact?
@@ -201,6 +203,16 @@ async def create_cypher_query(question: str, all_relevant_nodes:dict) -> tuple[s
         RETURN p1.name, p1.description, p1.hypernym, p1.alternativeName, labels(p1),
             p2.name, p2.description, p2.hypernym, p2.alternativeName, labels(p2),
             x.name, x.description, x.hypernym, x.alternativeName, labels(x)
+
+        Q: I want to know more about feature dependencies
+        AVAILABLE NODES: {{'artifactClass': ['feature dependency analysis approach'], 'requirement': ['capture feature dependencies']}}
+        ->
+        MATCH (a:artifactClass)
+        WHERE a.name IN ['feature dependency analysis approach']
+        MATCH (r:requirement)
+        WHERE r.name IN ['capture feature dependencies']
+        RETURN r.name, r.description, r.hypernym, r.alternativeName, labels(r),
+            a.name, a.description, a.hypernym, a.alternativeName, labels(a)
 
         # QUESTION
         {question}
@@ -260,10 +272,12 @@ def enrich_prompt(question:str, context:dict)-> tuple[str,str]:
 
     system_prompt = """You are an expert assistant that answers questions based strictly on structured graph data. 
                         Use only the information provided. 
+                        Answer only what you are asked, no need to add any more information, even if the context has it.
                         Do not make assumptions or fabricate details. 
                         If the graph does not provide enough information, say so clearly. 
                         Provide answers that are technically accurate and well-organized. 
-                        Do not give explanations about the system, database or how the context you were given is structured."""
+                        Do not give explanations about the system, database or how the context you were given is structured.
+                        Be flexible with the way you use the information provided, if you are asked about X, you can extract the information you need from the context without using all of it."""
     
     #Build final prompt
     prompt = f"""Use the following information to answer the question. Keep in mind that this information was processed beforehand to remove duplicate information, so inaccuracies can happen in the Others section when talking about quantities.

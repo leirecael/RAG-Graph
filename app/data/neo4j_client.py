@@ -1,4 +1,5 @@
 from neo4j import GraphDatabase, Driver
+from neo4j.exceptions import ServiceUnavailable, AuthError, AuthConfigurationError
 from config.config import NEO4J_URI,NEO4J_PASSWORD,NEO4J_USER
 
 # Global driver instance to manage the Neo4j connection
@@ -7,13 +8,19 @@ driver = None
 def get_driver() -> Driver:
     """
     Initialize and return a Neo4j driver instance.
-
+    
     Returns:
         Driver: A Neo4j driver connected to the database.
     """
     global driver
     if driver is None:
-        driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+        try:
+            driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+            #Test connection
+            with driver.session() as session:
+                session.run("RETURN 1")
+        except (ServiceUnavailable, AuthError, AuthConfigurationError) as e:
+            raise RuntimeError("[NEO4J_CONNECTION_ERROR] Failed to connect to Neo4j: " + str(e)) from e
     return driver
 
 def close_driver() -> None:

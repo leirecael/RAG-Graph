@@ -22,7 +22,7 @@ def test_read_data_logs_reads_valid_lines():
     Test that valid JSON entries in the data log file are read and returned correctly.
 
     Verifies:
-        - Each valid line in the log is deserialized correctly.
+        - Each valid line in the log is read correctly.
         - All entries are returned in order.
         - The content of each entry matches the original.
     """
@@ -46,12 +46,30 @@ def test_read_data_logs_returns_empty_list_if_missing():
     Test that reading from a nonexistent data log file returns an empty list.
 
     Verifies:
-        - The function gracefully handles missing files.
+        - The function handles missing files correctly.
         - An empty list is returned instead of an exception.
     """
     with patch("app.logs.log_reader.DATA_LOG", "/non/existent/data.jsonl"):
         logs = read_data_logs()
         assert logs == []
+
+def test_read_data_logs_skips_invalid_json():
+    """
+    Test that read_data_logs skips lines with invalid JSON and continues reading valid ones.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_path = os.path.join(tmpdir, "data.jsonl")
+
+        with open(log_path, "w", encoding="utf-8") as f:
+            f.write("{invalid json line}\n")
+            f.write(json.dumps({"message": "valid log"}) + "\n")
+
+        with patch("app.logs.log_reader.DATA_LOG", log_path):
+            logs = read_data_logs()
+
+        assert isinstance(logs, list)
+        assert len(logs) == 1 
+        assert logs[0]["message"] == "valid log"
 
 #------read_error_logs-------
 def test_read_error_logs_parses_all_valid_lines():
@@ -59,9 +77,9 @@ def test_read_error_logs_parses_all_valid_lines():
     Test that valid JSON entries in the error log file are read correctly.
 
     Verifies:
-        - Each valid error entry is deserialized.
-        - All expected fields (`error_type`, `details`, etc.) are preserved.
-        - Entries are returned in the order written.
+        - Each valid error entry is read correctly.
+        - All expected fields (error_type, details, etc.) are preserved.
+        - Entries are returned in the order they were written.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         error_log = os.path.join(tmpdir, "errors.jsonl")
@@ -83,9 +101,28 @@ def test_read_error_logs_returns_empty_list_if_missing():
     Test that reading from a nonexistent error log file returns an empty list.
 
     Verifies:
-        - The function handles missing file paths safely.
+        - The function handles missing file paths correctly.
         - Returns an empty list rather than raising an exception.
     """
     with patch("app.logs.log_reader.ERROR_LOG", "/non/existent/path.jsonl"):
         logs = read_error_logs()
         assert logs == []
+
+def test_read_error_logs_skips_invalid_json():
+    """
+    Test that read_error_logs skips lines with invalid JSON and continues reading valid ones.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_path = os.path.join(tmpdir, "errors.jsonl")
+
+
+        with open(log_path, "w", encoding="utf-8") as f:
+            f.write("{invalid json line}\n")
+            f.write(json.dumps({"message": "valid log"}) + "\n")
+
+        with patch("app.logs.log_reader.ERROR_LOG", log_path):
+            logs = read_error_logs()
+
+        assert isinstance(logs, list)
+        assert len(logs) == 1 
+        assert logs[0]["message"] == "valid log"

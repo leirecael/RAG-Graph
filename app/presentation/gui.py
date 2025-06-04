@@ -1,10 +1,12 @@
+import asyncio
 import streamlit as st
 from logic.orchestrator import process_question
-from logic.logs_service import get_logs, get_log_statistics_by_type
+from logic.logs_service import parse_logs, get_log_statistics_by_type
 from logs.logger import log_error
 import pandas as pd
+import altair as alt
 
-async def start_interface() -> None:
+def start_interface() -> None:
     """
     Launches the Streamlit-based user interface for the RAG (Retrieval-Augmented Generation) system.
 
@@ -65,14 +67,22 @@ async def start_interface() -> None:
                             response_placeholder = st.empty() #Placeholder to dynamically display response
                             try:
                                 #Call the backend to process the question
-                                response = await process_question(question.lower().strip())
+                                response = asyncio.run(process_question(question.lower().strip()))
 
                                 #Save question-response to session history
                                 st.session_state.history.append({
                                     "question": question,
                                     "response": response
                                 })
-                                response_placeholder.write(response) 
+                                response_placeholder.markdown(response)
+                            except RuntimeError as e:
+                                if "API key" in str(e):
+                                    response_placeholder.error("Error: The API key is invalid or it was not configured. Verify your credentials.")
+                                elif "[NEO4J_CONNECTION_ERROR]" in str(e):
+                                    response_placeholder.error("Error: Could not connect to the database. Checks if the DB is running and the configuration is correct.")
+                            except FileExistsError as e:
+                                if ".env" in str(e):
+                                    response_placeholder.error("Error: The file '.env' does not exist. Please, create it.")
                             except Exception as e:
                                 #Display error if something goes wrong
                                 response_placeholder.error("An unexpected error occurred. Try again.")
@@ -87,7 +97,7 @@ async def start_interface() -> None:
                 st.markdown("---")
 
                 #Show questions and responses
-                for idx, entry in enumerate(st.session_state.history):
+                for idx, entry in enumerate(reversed(st.session_state.history)):
                     with st.expander(f"Question #{len(st.session_state.history) - idx}: {entry['question']}"):
                         st.markdown(f"**Answer:**\n> {entry['response']}")
 
@@ -106,7 +116,7 @@ async def start_interface() -> None:
             log_category = st.radio("Select log type", ["Queries", "LLM Calls", "Embeddings", "Database", "Errors"])
 
             #Retrieve logs from system
-            logs_by_type, error_logs = get_logs()
+            logs_by_type, error_logs = parse_logs()
 
             #Choose data to display based on selected category
             if log_category == "Queries":
@@ -125,14 +135,14 @@ async def start_interface() -> None:
                 df = pd.DataFrame(data)
                 st.dataframe(df)
             else:
-                st.info("No logs available for this category.")
+                st.info("No logs available")
 
         #----------------- Page 4: Statistics -----------------
         elif page == "Statistics":
             stats_by_type = get_log_statistics_by_type()
 
             if stats_by_type:
-                st.markdown("Log Statistics by Type")
+                st.subheader("Log Statistics by Type")
 
                 for log_type, stat in stats_by_type.items():
                     #Separate logs by type
@@ -151,11 +161,26 @@ async def start_interface() -> None:
                             #If the task has costs, show them
                             if task_stat["avg_cost"] is not None:
                                 col1, col2 = st.columns(2)
-                                col1.metric("Average Cost ($)", f"{task_stat['avg_cost']:.4f}")
-                                col2.metric("Total Cost ($)", f"{task_stat['total_cost']:.4f}")
+                                col1.metric("Average Cost ($)", f"{task_stat['avg_cost']:.8f}")
+                                col2.metric("Total Cost ($)", f"{task_stat['total_cost']:.8f}")
 
-                            if "cost" in task_stat["df"].columns:
-                                st.line_chart(task_stat["df"][["cost"]].reset_index(drop=True), use_container_width=True)
+                            task_df = df[df["task_name"] == selected_task].copy()
+
+                            if "cost" in task_df.columns:
+                                st.bar_chart(task_df[["cost"]].reset_index(drop=True), x_label="Log (task)", y_label="Cost (USD)") 
+
+                            if "log_duration_sec" in task_df.columns:                         
+                                st.bar_chart(task_df[["log_duration_sec"]].reset_index(drop=True), x_label="Log (task)", y_label="Duration (Sec)")
+                                
+                            if "timestamp" in task_df.columns:
+                                task_df["timestamp"] = pd.to_datetime(task_df["timestamp"])
+                                task_df = task_df.set_index("timestamp")
+
+                                if "cost" in task_df.columns:
+                                    st.line_chart(task_df[["cost"]], x_label="Timestamp", y_label="Cost (USD)")
+
+                                if "log_duration_sec" in task_df.columns:
+                                    st.line_chart(task_df[["log_duration_sec"]], x_label="Timestamp", y_label="Duration (Sec)")
                         else:
                             col1, col2 = st.columns(2)
                             col1.metric("Total Entries", stat["count"])
@@ -164,13 +189,28 @@ async def start_interface() -> None:
                             #If the log has costs, show them
                             if stat["avg_cost"] is not None:
                                 col1, col2 = st.columns(2)
-                                col1.metric("Average Cost ($)", f"{stat['avg_cost']:.4f}")
-                                col2.metric("Total Cost ($)", f"{stat['total_cost']:.4f}")
+                                col1.metric("Average Cost ($)", f"{stat['avg_cost']:.8f}")
+                                col2.metric("Total Cost ($)", f"{stat['total_cost']:.8f}")
 
                             if "cost" in df.columns:
-                                st.line_chart(df[["cost"]].reset_index(drop=True), use_container_width=True)
+                                st.bar_chart(df[["cost"]].reset_index(drop=True), x_label="Log", y_label="Cost (USD)")
+                            
+                            if "log_duration_sec" in df.columns:                         
+                                st.bar_chart(df[["log_duration_sec"]].reset_index(drop=True), x_label="Log", y_label="Duration (Sec)")
+
+                            if "timestamp" in df.columns:
+                                df["timestamp"] = pd.to_datetime(df["timestamp"])
+                                df = df.set_index("timestamp")
+
+                                if "cost" in df.columns:
+                                    st.line_chart(df[["cost"]], x_label="Timestamp", y_label="Cost (USD)")
+
+                                if "log_duration_sec" in df.columns:
+                                    st.line_chart(df[["log_duration_sec"]], x_label="Timestamp", y_label="Duration (Sec)")
+
+
             else:
-                st.info("No statistics available.")
+                st.info("No statistics available")
 
     except Exception as e:
         log_error("GUIError", {

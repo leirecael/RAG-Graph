@@ -13,7 +13,6 @@ def test_log_data_basic():
     Verifies:
         - The function writes exactly one line to the log file.
         - The JSON content written matches the dictionary passed in.
-        - File I/O occurs at the expected log path (patched).
     """
     #Create a temporary directory to isolate file writing
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -60,7 +59,6 @@ def test_log_data_rejects_non_dict():
 
     Verifies:
         - Passing a non-dict raises a TypeError.
-        - Input validation is enforced.
     """
     with pytest.raises(TypeError):
         log_data("not a dict")
@@ -72,9 +70,8 @@ def test_log_error_basic():
 
     Verifies:
         - Exactly one JSON line is written.
-        - The JSON includes `timestamp`, `error_type`, and `details`.
-        - The content of `error_type` and `details` matches the input.
-        - File I/O is redirected via patching.
+        - The JSON includes 'timestamp', 'error_type', and 'details'.
+        - The content of 'error_type' and 'details' matches the input.
     """
     #Create a temporary directory to isolate file writing
     with tempfile.TemporaryDirectory() as tmpdir:

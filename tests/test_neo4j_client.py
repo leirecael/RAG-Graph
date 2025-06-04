@@ -42,15 +42,14 @@ def test_execute_query_specific_nodes():
         assert isinstance(record["name"], str)
 
 #-------execute_multiple_queries----------
-def test_execute_multiple_read_only_queries():
+def test_execute_multiple_queries_no_params():
     """
-    Test executing multiple read-only Cypher queries using APOC.
+    Test executing multiple Cypher queries using APOC without parameters.
     Checks that the results include correct fields and expected types.
 
     Verifies:
         - The result is a list with expected number of elements.
         - Each element has a 'value' key containing expected data.
-        - The types and keys in the nested dictionaries match expectations.
     """
     queries = [
         {

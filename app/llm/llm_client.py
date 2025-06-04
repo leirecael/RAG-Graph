@@ -1,4 +1,4 @@
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, AuthenticationError
 from config.config import OPENAI_API_KEY
 import openai
 import tiktoken
@@ -52,14 +52,17 @@ async def call_llm(user_prompt:str, system_prompt:str, model:str="gpt-4.1", temp
     max_tokens= MODEL_INFO[model]["max_context"] - MODEL_INFO[model]["max_output"]
     truncated_prompt, truncated = truncate_prompt(user_prompt, MODEL_INFO[model]["encoding"], max_tokens)
 
-    response = await client.responses.create(
-        model=model,
-        input=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": truncated_prompt}
-        ],
-        temperature=temperature,
-    )
+    try:
+        response = await client.responses.create(
+            model=model,
+            input=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": truncated_prompt}
+            ],
+            temperature=temperature,
+        )
+    except AuthenticationError as e:
+        raise RuntimeError("The API key is invalid or it was not configured.") from e
 
     input_tokens = response.usage.input_tokens
     output_tokens = response.usage.output_tokens
@@ -116,15 +119,18 @@ async def call_llm_structured(user_prompt: str, system_prompt:str, text_format:s
     max_tokens= MODEL_INFO[model]["max_context"] - MODEL_INFO[model]["max_output"]
     truncated_prompt, truncated = truncate_prompt(user_prompt, MODEL_INFO[model]["encoding"], max_tokens)
 
-    response = await client.responses.parse(
-        model=model,
-        input=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": truncated_prompt}
-        ],
-        temperature=temperature,
-        text_format=RESPONSE_FORMAT[text_format]
-    )
+    try:
+        response = await client.responses.parse(
+            model=model,
+            input=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": truncated_prompt}
+            ],
+            temperature=temperature,
+            text_format=RESPONSE_FORMAT[text_format]
+        )
+    except AuthenticationError as e:
+        raise RuntimeError("The API key is invalid or it was not configured.") from e
 
     input_tokens = response.usage.input_tokens
     output_tokens = response.usage.output_tokens
@@ -167,12 +173,13 @@ async def get_embedding(text:str, model:str="text-embedding-3-large", task_name:
     start_time = time.time()
     if model not in MODEL_INFO:
         raise ValueError(f"Unknown model: {model}")
-    
-    response = await client.embeddings.create(
-        model=model,
-        input=text
-    )
-
+    try:
+        response = await client.embeddings.create(
+            model=model,
+            input=text
+        )
+    except AuthenticationError as e:
+        raise RuntimeError("The API key is invalid or it was not configured.") from e
     total_tokens = response.usage.total_tokens
     cost = calculate_token_cost(model, total_tokens=total_tokens)
     duration_sec = time.time() - start_time
