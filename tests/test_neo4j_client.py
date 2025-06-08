@@ -1,6 +1,24 @@
 import pytest
 from data.neo4j_client import *
 
+#----get_driver---
+def test_get_driver_auth_error(mocker):
+    """
+    Simulates an authentication error when trying to connect to Neo4j.
+    Verifies that the appropriate RuntimeError is raised and contains expected text.
+    """
+    # Ensure the global driver is None before test
+    global driver
+    driver = None
+
+    with mocker.patch("data.neo4j_client.GraphDatabase.driver", side_effect=AuthError("Invalid credentials")):
+        with pytest.raises(RuntimeError) as exc_info:
+            get_driver()
+
+        assert "[NEO4J_CONNECTION_ERROR]" in str(exc_info.value)
+        assert "Invalid credentials" in str(exc_info.value)
+
+
 #------execute_query------
 def test_execute_query_basic_return():
     """

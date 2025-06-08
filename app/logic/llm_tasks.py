@@ -15,7 +15,7 @@ async def validate_question(question: str)->tuple[Question, float]:
     """
 
     #Build system and user prompts for LLM
-    system_prompt = "You are a research domain classifier. Only return true if the question relates to technical or scientific issues and is safe."
+    system_prompt = "You are a research domain classifier. Only return true if the question relates to technical or scientific issues and is safe. Also, let questions asking about the system's capabilities pass."
 
     prompt = f"""
         # TASK
@@ -34,6 +34,7 @@ async def validate_question(question: str)->tuple[Question, float]:
         - Technical improvements
         - Structured scientific inquiries
         - Questions related to graph nodes.
+        - Asking about what types of questions the system can answer.
 
         # INVALID
         - News, opinions, non-technical questions
@@ -101,7 +102,8 @@ async def extract_entities(question: str) -> tuple[EntityList, float]:
         [{{"value": null, "type": "problem", "embedding": null}}, {{"value": null, "type": "artifactClass", "embedding": null}}]
         Question: How many stakeholders are affected by the lack of software evolution history?
         [{{"value": "lack of software evolution history", "type": "problem", "embedding": null}}, {{"value": null, "type": "stakeholder", "embedding": null}}]
-
+        Question: What problems are there in the database?
+        [{{"value": null, "type": "problem", "embedding": null}}]
         # NEGATIVE EXAMPLE
         Question: What's the weather today?
         []

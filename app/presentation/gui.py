@@ -4,7 +4,6 @@ from logic.orchestrator import process_question
 from logic.logs_service import parse_logs, get_log_statistics_by_type
 from logs.logger import log_error
 import pandas as pd
-import altair as alt
 
 def start_interface() -> None:
     """
@@ -80,9 +79,6 @@ def start_interface() -> None:
                                     response_placeholder.error("Error: The API key is invalid or it was not configured. Verify your credentials.")
                                 elif "[NEO4J_CONNECTION_ERROR]" in str(e):
                                     response_placeholder.error("Error: Could not connect to the database. Checks if the DB is running and the configuration is correct.")
-                            except FileExistsError as e:
-                                if ".env" in str(e):
-                                    response_placeholder.error("Error: The file '.env' does not exist. Please, create it.")
                             except Exception as e:
                                 #Display error if something goes wrong
                                 response_placeholder.error("An unexpected error occurred. Try again.")
