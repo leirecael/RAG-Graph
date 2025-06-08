@@ -34,7 +34,7 @@ Windows:
 
 ```bash
 python -m venv .venv
-.\.venv\Scripts\activate
+.venv\Scripts\activate
 ```
 
 Linux/macOS:
@@ -55,13 +55,13 @@ pip install -r requirements.txt
 Windows:
 
 ```bash
-streamlit run .\app\main.py
+streamlit run app\main.py
 ```
 
 Linux/macOS:
 
 ```bash
-streamlit run ./app/main.py
+streamlit run app/main.py
 ```
 
 Once the app is running, go to your web browser and visit:
