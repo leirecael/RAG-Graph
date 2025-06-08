@@ -8,7 +8,7 @@
   - Neo4j database credentials
   - OpenAI API key
 
-Create a `.env` file in the root of the project with the following content:
+Create a `.env` file in the app/config/.env path of the project with the following content:
 
 ```env
 NEO4J_URI=your_neo4j_uri
@@ -37,6 +37,13 @@ python -m venv .venv
 .\.venv\Scripts\activate
 ```
 
+Linux/macOS:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+```
+
 ### 3. Install libraries and dependencies
 
 ```bash
@@ -49,6 +56,12 @@ Windows:
 
 ```bash
 streamlit run .\app\main.py
+```
+
+Linux/macOS:
+
+```bash
+streamlit run ./app/main.py
 ```
 
 Once the app is running, go to your web browser and visit:
