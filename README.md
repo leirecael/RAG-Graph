@@ -28,7 +28,7 @@ git clone https://github.com/leirecael/RAG-Graph.git
 cd RAG-Graph
 ```
 
-### 2. Create virtual environment and access it(optional)
+### 2. Create virtual environment and access it (optional)
 
 Windows:
 
