@@ -7,7 +7,7 @@ import pandas as pd
 
 def start_interface() -> None:
     """
-    Launches the Streamlit-based user interface for the RAG (Retrieval-Augmented Generation) system.
+    Launches the Streamlit user interface for the RAG (Retrieval-Augmented Generation) system.
 
     This interface provides four main functionalities accessible through a sidebar:
         1. Queries: Submit natural language questions and get answers via the RAG backend.
