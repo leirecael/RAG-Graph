@@ -1,7 +1,8 @@
-from presentation.gui import start_interface
+from presentation.gui import GUIInterface
 
 def main():
-    start_interface()
+    gui = GUIInterface()
+    gui.start_interface()
 
 if __name__ == "__main__":
     main()

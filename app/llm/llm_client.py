@@ -6,241 +6,246 @@ from datetime import datetime
 import time
 from models.entity import EntityList
 from models.question import Question
-from logs.logger import log_data
+from logs.logger import Logger
 
-#Set API key and create OpenAI client
-openai.api_key = OPENAI_API_KEY
-client = AsyncOpenAI()
 
-#April 2025 pricing(US$) per 1,000 tokens for each model, encoding type and token usage limits. Max_content is the maximun tokens the model can use per call(input/output). Max_output is for the maximum token output allowed per call.
-MODEL_INFO = {
-    "gpt-4.1-mini": {"input_price": 0.0004, "output_price": 0.0016, "max_context": 1047576, "max_output":32768, "encoding":"o200k_base"},
-    "gpt-4.1-nano": {"input_price": 0.0001, "output_price": 0.0004, "max_context": 1047576, "max_output":32768, "encoding":"o200k_base"},
-    "gpt-4.1": {"input_price": 0.002, "output_price": 0.008, "max_context": 1047576, "max_output":32768, "encoding":"o200k_base"},
-    "text-embedding-3-small": 0.00002,
-    "text-embedding-3-large": 0.00013
-}
+class LlmClient:
+    #Set API key
+    openai.api_key = OPENAI_API_KEY
 
-#Mapping from response format name to data model class
-RESPONSE_FORMAT = {
-    "entitylist": EntityList,
-    "question": Question
-}
+    #April 2025 pricing(US$) per 1,000 tokens for each model, encoding type and token usage limits. Max_content is the maximun tokens the model can use per call(input/output). Max_output is for the maximum token output allowed per call.
+    MODEL_INFO = {
+        "gpt-4.1-mini": {"input_price": 0.0004, "output_price": 0.0016, "max_context": 1047576, "max_output":32768, "encoding":"o200k_base"},
+        "gpt-4.1-nano": {"input_price": 0.0001, "output_price": 0.0004, "max_context": 1047576, "max_output":32768, "encoding":"o200k_base"},
+        "gpt-4.1": {"input_price": 0.002, "output_price": 0.008, "max_context": 1047576, "max_output":32768, "encoding":"o200k_base"},
+        "text-embedding-3-small": 0.00002,
+        "text-embedding-3-large": 0.00013
+    }
 
-async def call_llm(user_prompt:str, system_prompt:str, model:str="gpt-4.1", temperature:float=0.7, task_name:str = None)->tuple[str, float]:
-    """
-    Calls an OpenAI LLM.
+    #Mapping from response format name to data model class
+    RESPONSE_FORMAT = {
+        "entitylist": EntityList,
+        "question": Question
+    }
 
-    Args:
-        user_prompt (str): The user's prompt text.
-        system_prompt (str): System-level prompt instructions.
-        model (str): OpenAI model name.
-        temperature (float): Sampling temperature.
-        task_name (str, optional): Logging task name.
+    def __init__(self):
+        self.client = AsyncOpenAI()
+        self.logger = Logger()
 
-    Returns:
-        tuple[str, float]: The generated response and the cost.
-    """
-    start_time = time.time()
-    if model not in MODEL_INFO:
-        raise ValueError(f"Unknown model: {model}")
-    
-    if temperature < 0.0 or temperature > 2.0:
-        raise ValueError(f"Temperatura is out of bounds (0-2): {temperature}")
-    
-    #Calculate max allowed input tokens
-    max_tokens= MODEL_INFO[model]["max_context"] - MODEL_INFO[model]["max_output"]
-    truncated_prompt, truncated = truncate_prompt(user_prompt, MODEL_INFO[model]["encoding"], max_tokens)
+    async def call_llm(self, user_prompt:str, system_prompt:str, model:str="gpt-4.1", temperature:float=0.7, task_name:str = None)->tuple[str, float]:
+        """
+        Calls an OpenAI LLM.
 
-    try:
-        response = await client.responses.create(
-            model=model,
-            input=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": truncated_prompt}
-            ],
-            temperature=temperature,
-        )
-    except AuthenticationError as e:
-        raise RuntimeError("The API key is invalid or it was not configured.") from e
+        Args:
+            user_prompt (str): The user's prompt text.
+            system_prompt (str): System-level prompt instructions.
+            model (str): OpenAI model name.
+            temperature (float): Sampling temperature.
+            task_name (str, optional): Logging task name.
 
-    input_tokens = response.usage.input_tokens
-    output_tokens = response.usage.output_tokens
+        Returns:
+            tuple[str, float]: The generated response and the cost.
+        """
+        start_time = time.time()
+        if model not in self.MODEL_INFO:
+            raise ValueError(f"Unknown model: {model}")
+        
+        if temperature < 0.0 or temperature > 2.0:
+            raise ValueError(f"Temperatura is out of bounds (0-2): {temperature}")
+        
+        #Calculate max allowed input tokens
+        max_tokens= self.MODEL_INFO[model]["max_context"] - self.MODEL_INFO[model]["max_output"]
+        truncated_prompt, truncated = self.truncate_prompt(user_prompt, self.MODEL_INFO[model]["encoding"], max_tokens)
 
-    cost = calculate_token_cost(model,input_tokens, output_tokens)
-    duration_sec = time.time() - start_time
+        try:
+            response = await self.client.responses.create(
+                model=model,
+                input=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": truncated_prompt}
+                ],
+                temperature=temperature,
+            )
+        except AuthenticationError as e:
+            raise RuntimeError("The API key is invalid or it was not configured.") from e
 
-    #Log LLM call data
-    log_data({
-        "timestamp": datetime.now().isoformat(),
-        "log_type": "llm_call",
-        "task_name": task_name,
-        "model": model,
-        "system_prompt": system_prompt,
-        "user_prompt": truncated_prompt,
-        "response": response.output_text,
-        "truncated": truncated,
-        "temperature": temperature,
-        "tokens": {
-            "input": input_tokens,
-            "output": output_tokens
-        },
-        "cost": cost,
-        "log_duration_sec": duration_sec
-    })
-    return response.output_text, cost
+        input_tokens = response.usage.input_tokens
+        output_tokens = response.usage.output_tokens
 
-async def call_llm_structured(user_prompt: str, system_prompt:str, text_format:str, model:str ="gpt-4.1", temperature:float=0.7, task_name:str = None)->tuple[Question|EntityList, float]:
-    """
-    Calls an OpenAI LLM with structured output parsing.
+        cost = self.calculate_token_cost(model,input_tokens, output_tokens)
+        duration_sec = time.time() - start_time
 
-    Args:
-        user_prompt (str): The user's input text.
-        system_prompt (str): System-level prompt instructions.
-        text_format (str): Key in RESPONSE_FORMAT dict for expected structured format.
-        model (str): OpenAI model name.
-        temperature (float): Sampling temperature.
-        task_name (str, optional): Logging task name.
+        #Log LLM call data
+        self.logger.log_data({
+            "timestamp": datetime.now().isoformat(),
+            "log_type": "llm_call",
+            "task_name": task_name,
+            "model": model,
+            "system_prompt": system_prompt,
+            "user_prompt": truncated_prompt,
+            "response": response.output_text,
+            "truncated": truncated,
+            "temperature": temperature,
+            "tokens": {
+                "input": input_tokens,
+                "output": output_tokens
+            },
+            "cost": cost,
+            "log_duration_sec": duration_sec
+        })
+        return response.output_text, cost
 
-    Returns:
-        tuple[Question|EntityList, float]: Structured model response and its cost.
-    """
-    start_time = time.time()
-    if model not in MODEL_INFO:
-        raise ValueError(f"Unknown model: {model}")
-    
-    if temperature < 0.0 or temperature> 2.0:
-        raise ValueError(f"Temperatura is out of bounds (0-2): {temperature}")
-    
-    if text_format not in RESPONSE_FORMAT:
-        raise ValueError(f"Unknown output format: {text_format}")
+    async def call_llm_structured(self, user_prompt: str, system_prompt:str, text_format:str, model:str ="gpt-4.1", temperature:float=0.7, task_name:str = None)->tuple[Question|EntityList, float]:
+        """
+        Calls an OpenAI LLM with structured output parsing.
 
-    #Calculate max allowed input tokens
-    max_tokens= MODEL_INFO[model]["max_context"] - MODEL_INFO[model]["max_output"]
-    truncated_prompt, truncated = truncate_prompt(user_prompt, MODEL_INFO[model]["encoding"], max_tokens)
+        Args:
+            user_prompt (str): The user's input text.
+            system_prompt (str): System-level prompt instructions.
+            text_format (str): Key in RESPONSE_FORMAT dict for expected structured format.
+            model (str): OpenAI model name.
+            temperature (float): Sampling temperature.
+            task_name (str, optional): Logging task name.
 
-    try:
-        response = await client.responses.parse(
-            model=model,
-            input=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": truncated_prompt}
-            ],
-            temperature=temperature,
-            text_format=RESPONSE_FORMAT[text_format]
-        )
-    except AuthenticationError as e:
-        raise RuntimeError("The API key is invalid or it was not configured.") from e
+        Returns:
+            tuple[Question|EntityList, float]: Structured model response and its cost.
+        """
+        start_time = time.time()
+        if model not in self.MODEL_INFO:
+            raise ValueError(f"Unknown model: {model}")
+        
+        if temperature < 0.0 or temperature> 2.0:
+            raise ValueError(f"Temperatura is out of bounds (0-2): {temperature}")
+        
+        if text_format not in self.RESPONSE_FORMAT:
+            raise ValueError(f"Unknown output format: {text_format}")
 
-    input_tokens = response.usage.input_tokens
-    output_tokens = response.usage.output_tokens
-    cost = calculate_token_cost(model,input_tokens, output_tokens)
-    duration_sec = time.time() - start_time   
+        #Calculate max allowed input tokens
+        max_tokens= self.MODEL_INFO[model]["max_context"] - self.MODEL_INFO[model]["max_output"]
+        truncated_prompt, truncated = self.truncate_prompt(user_prompt, self.MODEL_INFO[model]["encoding"], max_tokens)
 
-    #Log LLM call data
-    log_data({
-        "timestamp": datetime.now().isoformat(),
-        "log_type": "llm_call",
-        "task_name": task_name,
-        "model": model,
-        "system_prompt": system_prompt,
-        "user_prompt": truncated_prompt,
-        "response": response.output_parsed.json(),
-        "truncated": truncated,
-        "temperature": temperature,
-        "tokens": {
-            "input": input_tokens,
-            "output": output_tokens
-        },
-        "cost": cost,
-        "log_duration_sec": duration_sec
-    })
-    
-    return response.output_parsed, cost
+        try:
+            response = await self.client.responses.parse(
+                model=model,
+                input=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": truncated_prompt}
+                ],
+                temperature=temperature,
+                text_format=self.RESPONSE_FORMAT[text_format]
+            )
+        except AuthenticationError as e:
+            raise RuntimeError("The API key is invalid or it was not configured.") from e
 
-async def get_embedding(text:str, model:str="text-embedding-3-large", task_name:str = None)->tuple[list[float],float]:
-    """
-    Calls OpenAI's embedding endpoint to calculate the vector of the input text.
+        input_tokens = response.usage.input_tokens
+        output_tokens = response.usage.output_tokens
+        cost = self.calculate_token_cost(model,input_tokens, output_tokens)
+        duration_sec = time.time() - start_time   
 
-    Args:
-        text (str): The input text to embed.
-        model (str): The embedding model to use.
-        task_name (str, optional): Logging task name.
+        #Log LLM call data
+        self.logger.log_data({
+            "timestamp": datetime.now().isoformat(),
+            "log_type": "llm_call",
+            "task_name": task_name,
+            "model": model,
+            "system_prompt": system_prompt,
+            "user_prompt": truncated_prompt,
+            "response": response.output_parsed.json(),
+            "truncated": truncated,
+            "temperature": temperature,
+            "tokens": {
+                "input": input_tokens,
+                "output": output_tokens
+            },
+            "cost": cost,
+            "log_duration_sec": duration_sec
+        })
+        
+        return response.output_parsed, cost
 
-    Returns:
-        tuple[list[float], float]: The embedding vector and its cost.
-    """
-    start_time = time.time()
-    if model not in MODEL_INFO:
-        raise ValueError(f"Unknown model: {model}")
-    try:
-        response = await client.embeddings.create(
-            model=model,
-            input=text
-        )
-    except AuthenticationError as e:
-        raise RuntimeError("The API key is invalid or it was not configured.") from e
-    total_tokens = response.usage.total_tokens
-    cost = calculate_token_cost(model, total_tokens=total_tokens)
-    duration_sec = time.time() - start_time
+    async def get_embedding(self, text:str, model:str="text-embedding-3-large", task_name:str = None)->tuple[list[float],float]:
+        """
+        Calls OpenAI's embedding endpoint to calculate the vector of the input text.
 
-    #Log embedding endpoint call data
-    log_data({
-        "timestamp": datetime.now().isoformat(),
-        "log_type": "embedding",
-        "task_name": task_name,
-        "model": model,
-        "input": text,
-        "tokens": total_tokens,
-        "cost": cost,
-        "log_duration_sec": duration_sec
-    })
-    return response.data[0].embedding, cost
+        Args:
+            text (str): The input text to embed.
+            model (str): The embedding model to use.
+            task_name (str, optional): Logging task name.
 
-def calculate_token_cost(model:str, input_tokens:int=0, output_tokens:int=0, total_tokens:int=0) -> float:
-    """
-    Calculates the cost in US$ for a model call based on tokens used and model pricing.
+        Returns:
+            tuple[list[float], float]: The embedding vector and its cost.
+        """
+        start_time = time.time()
+        if model not in self.MODEL_INFO:
+            raise ValueError(f"Unknown model: {model}")
+        try:
+            response = await self.client.embeddings.create(
+                model=model,
+                input=text
+            )
+        except AuthenticationError as e:
+            raise RuntimeError("The API key is invalid or it was not configured.") from e
+        total_tokens = response.usage.total_tokens
+        cost = self.calculate_token_cost(model, total_tokens=total_tokens)
+        duration_sec = time.time() - start_time
 
-    Args:
-        model (str): Model name.
-        input_tokens (int): Number of input tokens.
-        output_tokens (int): Number of output tokens.
-        total_tokens (int): Used for embedding models.
+        #Log embedding endpoint call data
+        self.logger.log_data({
+            "timestamp": datetime.now().isoformat(),
+            "log_type": "embedding",
+            "task_name": task_name,
+            "model": model,
+            "input": text,
+            "tokens": total_tokens,
+            "cost": cost,
+            "log_duration_sec": duration_sec
+        })
+        return response.data[0].embedding, cost
 
-    Returns:
-        float: Cost in USD.
-    """
-    if model not in MODEL_INFO:
-        raise ValueError(f"Unknown model pricing for: {model}")
-    
-    pricing = MODEL_INFO[model]
+    def calculate_token_cost(self, model:str, input_tokens:int=0, output_tokens:int=0, total_tokens:int=0) -> float:
+        """
+        Calculates the cost in US$ for a model call based on tokens used and model pricing.
 
-    #Embedding model price
-    if isinstance(pricing, float) and total_tokens > 0 and input_tokens == 0 and output_tokens == 0:
-        return (total_tokens / 1000) * pricing
-    #LLM model price
-    elif "input_price" in pricing and "output_price" in pricing and total_tokens == 0 and input_tokens > 0 and output_tokens > 0:
-        return (input_tokens / 1000) * pricing["input_price"] + (output_tokens / 1000) * pricing["output_price"]
-    else:
-        raise ValueError("Token values are incorrect.")
+        Args:
+            model (str): Model name.
+            input_tokens (int): Number of input tokens.
+            output_tokens (int): Number of output tokens.
+            total_tokens (int): Used for embedding models.
 
-def truncate_prompt(prompt:str,model:str, max_tokens:int) -> tuple[str,bool]:
-    """
-    Truncates a prompt to fit within token limits for a model.
+        Returns:
+            float: Cost in USD.
+        """
+        if model not in self.MODEL_INFO:
+            raise ValueError(f"Unknown model pricing for: {model}")
+        
+        pricing = self.MODEL_INFO[model]
 
-    Args:
-        prompt (str): Full text prompt.
-        model (str): Encoding model for tiktoken.
-        max_tokens (int): Maximum number of tokens allowed.
+        #Embedding model price
+        if isinstance(pricing, float) and total_tokens > 0 and input_tokens == 0 and output_tokens == 0:
+            return (total_tokens / 1000) * pricing
+        #LLM model price
+        elif "input_price" in pricing and "output_price" in pricing and total_tokens == 0 and input_tokens > 0 and output_tokens > 0:
+            return (input_tokens / 1000) * pricing["input_price"] + (output_tokens / 1000) * pricing["output_price"]
+        else:
+            raise ValueError("Token values are incorrect.")
 
-    Returns:
-        str: Truncated prompt if necessary.
-    """
-    encodig = tiktoken.get_encoding(model)
-    tokens = encodig.encode(prompt)
+    def truncate_prompt(self, prompt:str,model:str, max_tokens:int) -> tuple[str,bool]:
+        """
+        Truncates a prompt to fit within token limits for a model.
 
-    if len(tokens)<max_tokens:
-        return prompt, False
-    
-    truncated = tokens[:max_tokens]
-    return encodig.decode(truncated), True
+        Args:
+            prompt (str): Full text prompt.
+            model (str): Encoding model for tiktoken.
+            max_tokens (int): Maximum number of tokens allowed.
+
+        Returns:
+            str: Truncated prompt if necessary.
+        """
+        encodig = tiktoken.get_encoding(model)
+        tokens = encodig.encode(prompt)
+
+        if len(tokens)<max_tokens:
+            return prompt, False
+        
+        truncated = tokens[:max_tokens]
+        return encodig.decode(truncated), True

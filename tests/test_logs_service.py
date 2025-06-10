@@ -1,6 +1,8 @@
 import pandas as pd
 from unittest.mock import patch
-from app.logic.logs_service import parse_logs, get_log_statistics_by_type
+from app.logic.logs_service import LogsService
+
+test_log_serv = LogsService()
 
 #------parse_logs-------
 def test_parse_logs_returns_correct_structure():
@@ -23,8 +25,8 @@ def test_parse_logs_returns_correct_structure():
         {"error_type": "Timeout", "message": "API call failed"}
     ]
 
-    with patch("app.logic.logs_service.read_data_logs", return_value=data_entries), patch("app.logic.logs_service.read_error_logs", return_value=error_entries):
-        logs_by_type, error_logs = parse_logs()
+    with patch("app.logic.logs_service.LogReader.read_data_logs", return_value=data_entries), patch("app.logic.logs_service.LogReader.read_error_logs", return_value=error_entries):
+        logs_by_type, error_logs = test_log_serv.parse_logs()
 
     assert len(logs_by_type["register_query"]) == 1
     assert len(logs_by_type["llm_call"]) == 1
@@ -50,8 +52,8 @@ def test_get_log_statistics_by_type_with_valid_data():
         {"log_type": "register_query", "cost": 3.5, "log_duration_sec": 2.0}
     ]
 
-    with patch("app.logic.logs_service.read_data_logs", return_value=entries), patch("app.logic.logs_service.read_error_logs", return_value=[]):
-        stats = get_log_statistics_by_type()
+    with patch("app.logic.logs_service.LogReader.read_data_logs", return_value=entries), patch("app.logic.logs_service.LogReader.read_error_logs", return_value=[]):
+        stats = test_log_serv.get_log_statistics_by_type()
 
     reg_stats = stats["register_query"]
     assert reg_stats["total_cost"] == 6.0
@@ -73,8 +75,8 @@ def test_get_log_statistics_by_type_with_missing_fields():
         {"log_type": "llm_call", "info": "call 2"}
     ]
 
-    with patch("app.logic.logs_service.read_data_logs", return_value=entries), patch("app.logic.logs_service.read_error_logs", return_value=[]):
-        stats = get_log_statistics_by_type()
+    with patch("app.logic.logs_service.LogReader.read_data_logs", return_value=entries), patch("app.logic.logs_service.LogReader.read_error_logs", return_value=[]):
+        stats = test_log_serv.get_log_statistics_by_type()
 
     llm_stats = stats["llm_call"]
     assert llm_stats["total_cost"] is None
@@ -95,8 +97,8 @@ def test_get_log_statistics_by_type_ignores_non_numeric_costs_and_durations():
         {"log_type": "embedding", "cost": "3.0", "log_duration_sec": "xyz"}
     ]
 
-    with patch("app.logic.logs_service.read_data_logs", return_value=entries), patch("app.logic.logs_service.read_error_logs", return_value=[]):
-        stats = get_log_statistics_by_type()
+    with patch("app.logic.logs_service.LogReader.read_data_logs", return_value=entries), patch("app.logic.logs_service.LogReader.read_error_logs", return_value=[]):
+        stats = test_log_serv.get_log_statistics_by_type()
 
     emb_stats = stats["embedding"]
     assert round(emb_stats["total_cost"], 1) == 3.0
@@ -118,8 +120,8 @@ def test_get_log_statistics_by_type_with_task_names():
         {"log_type": "embedding", "cost": 1.0, "log_duration_sec": 1.5, "task_name": "task_B"}
     ]
 
-    with patch("app.logic.logs_service.read_data_logs", return_value=entries), patch("app.logic.logs_service.read_error_logs", return_value=[]):
-        stats = get_log_statistics_by_type()
+    with patch("app.logic.logs_service.LogReader.read_data_logs", return_value=entries), patch("app.logic.logs_service.LogReader.read_error_logs", return_value=[]):
+        stats = test_log_serv.get_log_statistics_by_type()
 
     emb_stats = stats["embedding"]
     assert "tasks" in emb_stats

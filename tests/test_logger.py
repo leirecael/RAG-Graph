@@ -3,7 +3,9 @@ import json
 import tempfile
 import pytest
 from unittest.mock import patch
-from app.logs.logger import log_data, log_error
+from app.logs.logger import Logger
+
+test_logger = Logger()
 
 #------log_data-----------
 def test_log_data_basic():
@@ -19,8 +21,8 @@ def test_log_data_basic():
         data_path = os.path.join(tmpdir, "data.jsonl")
 
         #Patch the global DATA_LOG path to redirect writes to the temp file
-        with patch("app.logs.logger.DATA_LOG", data_path):
-            log_data({"message": "test log", "value": 123})
+        with patch("app.logs.logger.Logger.DATA_LOG", data_path):
+            test_logger.log_data({"message": "test log", "value": 123})
 
             #Read the contents of the file to verify what was written
             with open(data_path, "r", encoding="utf-8") as f:
@@ -43,8 +45,8 @@ def test_log_data_with_empty_dict():
     with tempfile.TemporaryDirectory() as tmpdir:
         data_path = os.path.join(tmpdir, "data.jsonl")
 
-        with patch("app.logs.logger.DATA_LOG", data_path):
-            log_data({})
+        with patch("app.logs.logger.Logger.DATA_LOG", data_path):
+            test_logger.log_data({})
 
             with open(data_path, "r", encoding="utf-8") as f:
                 lines = f.readlines()
@@ -61,7 +63,7 @@ def test_log_data_rejects_non_dict():
         - Passing a non-dict raises a TypeError.
     """
     with pytest.raises(TypeError):
-        log_data("not a dict")
+        test_logger.log_data("not a dict")
 
 #------log_error-----------
 def test_log_error_basic():
@@ -78,8 +80,8 @@ def test_log_error_basic():
         error_path = os.path.join(tmpdir, "errors.jsonl")
 
         #Patch the global ERROR_LOG path to redirect writes to the temp file
-        with patch("app.logs.logger.ERROR_LOG", error_path):
-            log_error("TestError", {"info": "something failed"})
+        with patch("app.logs.logger.Logger.ERROR_LOG", error_path):
+            test_logger.log_error("TestError", {"info": "something failed"})
 
             #Read the contents of the file to verify what was written
             with open(error_path, "r", encoding="utf-8") as f:
@@ -105,8 +107,8 @@ def test_log_error_with_empty_details():
     with tempfile.TemporaryDirectory() as tmpdir:
         error_path = os.path.join(tmpdir, "errors.jsonl")
 
-        with patch("app.logs.logger.ERROR_LOG", error_path):
-            log_error("EmptyDetailError", {})
+        with patch("app.logs.logger.Logger.ERROR_LOG", error_path):
+            test_logger.log_error("EmptyDetailError", {})
 
             with open(error_path, "r", encoding="utf-8") as f:
                 lines = f.readlines()
@@ -128,6 +130,6 @@ def test_log_error_type_error():
     with tempfile.TemporaryDirectory() as tmpdir:
         error_path = os.path.join(tmpdir, "errors.jsonl")
 
-        with patch("app.logs.logger.ERROR_LOG", error_path):
+        with patch("app.logs.logger.Logger.ERROR_LOG", error_path):
             with pytest.raises(TypeError):
-                log_error("TypeError", [])
+                test_logger.log_error("TypeError", [])

@@ -1,8 +1,10 @@
 import pytest
-from app.logic.llm_tasks import validate_question, extract_entities, create_cypher_query, enrich_prompt, generate_entity_embeddings, generate_final_answer
+from app.logic.llm_tasks import LlmTasks
 from app.models.question import Question
 from app.models.entity import *
 import json
+
+test_tasks = LlmTasks()
 
 #----------validate_question---------
 @pytest.mark.asyncio
@@ -15,10 +17,10 @@ async def test_validate_question_invalid(mocker):
         - A reasoning message is returned.
         - The cost is calculated and returned as a float.
     """
-    mock_log = mocker.patch("llm.llm_client.log_data")
+    mock_log = mocker.patch("app.llm.llm_client.Logger.log_data")
 
     question = "What is the weather in Paris?"
-    response, cost = await validate_question(question)
+    response, cost = await test_tasks.validate_question(question)
 
     mock_log.assert_called()
     assert response.is_valid is False
@@ -35,10 +37,10 @@ async def test_validate_question_valid(mocker):
         - No reasoning is returned.
         - The cost is returned as a float.
     """
-    mock_log = mocker.patch("llm.llm_client.log_data")
+    mock_log = mocker.patch("app.llm.llm_client.Logger.log_data")
 
     question = "How can we address climate change?"
-    response, cost = await validate_question(question)
+    response, cost = await test_tasks.validate_question(question)
 
     mock_log.assert_called()
     assert response.is_valid is True
@@ -54,10 +56,10 @@ async def test_validate_question_spelling_correction(mocker):
         - The corrected question is considered valid.
         - The output question is different from the input.
     """
-    mock_log = mocker.patch("llm.llm_client.log_data")
+    mock_log = mocker.patch("app.llm.llm_client.Logger.log_data")
 
     question = "Hw cn featre modelz help?"
-    response, _ = await validate_question(question)
+    response, _ = await test_tasks.validate_question(question)
 
     mock_log.assert_called()
     assert response.is_valid is True
@@ -73,10 +75,10 @@ async def test_extract_entities_basic(mocker):
         - Entities like 'stakeholder' and 'problem' are correctly identified.
         - The cost is returned as a float.
     """
-    mock_log = mocker.patch("llm.llm_client.log_data")
+    mock_log = mocker.patch("app.llm.llm_client.Logger.log_data")
 
     question = "What problems do developers face?"
-    response, cost = await extract_entities(question)
+    response, cost = await test_tasks.extract_entities(question)
 
     mock_log.assert_called()
     entity_types = [e.type for e in response.entities]
@@ -92,10 +94,10 @@ async def test_extract_entities_none(mocker):
     Verifies:
         - The list of entities is empty.
     """
-    mock_log = mocker.patch("llm.llm_client.log_data")
+    mock_log = mocker.patch("app.llm.llm_client.Logger.log_data")
 
     question = "What's the weather today?"
-    response, _ = await extract_entities(question)
+    response, _ = await test_tasks.extract_entities(question)
 
     mock_log.assert_called()
     assert response.entities == []
@@ -109,10 +111,10 @@ async def test_extract_entities_with_null_values(mocker):
         - Entities may have a value of None.
         - No error occurs when handling these entities.
     """
-    mock_log = mocker.patch("llm.llm_client.log_data")
+    mock_log = mocker.patch("app.llm.llm_client.Logger.log_data")
     
     question = "What problems are solved by the same artifact?"
-    response, _ = await extract_entities(question)
+    response, _ = await test_tasks.extract_entities(question)
 
     mock_log.assert_called()
     problem = [e for e in response.entities if e.type == "problem"]
@@ -130,11 +132,11 @@ async def test_generate_entity_embeddings_with_valid_entities(mocker):
         - Each entity with a value gets an embedding (a list of floats).
         - Total cost is greater than 0.
     """
-    mock_log = mocker.patch("llm.llm_client.log_data")
+    mock_log = mocker.patch("app.llm.llm_client.Logger.log_data")
 
     entities = [Entity(value="AI", type=EntityEnum.context, embedding=None), Entity(value="developers", type=EntityEnum.stakeholder, embedding=None)]
 
-    updated_entities, total_cost = await generate_entity_embeddings(entities)
+    updated_entities, total_cost = await test_tasks.generate_entity_embeddings(entities)
 
     for entity in updated_entities:
         if entity.value:
@@ -155,11 +157,11 @@ async def test_generate_entity_embeddings_with_none_values(mocker):
         - Other entities do get embeddings.
         - The cost is not zero.
     """
-    mock_log = mocker.patch("llm.llm_client.log_data")
+    mock_log = mocker.patch("app.llm.llm_client.Logger.log_data")
 
     entities = [Entity(value="AI", type=EntityEnum.context, embedding=None), Entity(value=None, type=EntityEnum.problem, embedding=None)]
 
-    updated_entities, total_cost = await generate_entity_embeddings(entities)
+    updated_entities, total_cost = await test_tasks.generate_entity_embeddings(entities)
 
     assert updated_entities[0].embedding is not None
     assert updated_entities[1].embedding is None
@@ -167,7 +169,7 @@ async def test_generate_entity_embeddings_with_none_values(mocker):
     mock_log.assert_called()
 
 @pytest.mark.asyncio
-async def test_generate_entity_embeddings_empty_list(mocker):
+async def test_generate_entity_embeddings_empty_list():
     """
     Test that an empty input list returns no embeddings and zero cost.
 
@@ -176,7 +178,7 @@ async def test_generate_entity_embeddings_empty_list(mocker):
         - Total cost is 0.
     """
 
-    updated_entities, total_cost = await generate_entity_embeddings([])
+    updated_entities, total_cost = await test_tasks.generate_entity_embeddings([])
 
     assert updated_entities == []
     assert total_cost == 0.0
@@ -213,7 +215,7 @@ async def test_create_cypher_query_basic_call(mocker):
         - The query includes the required MATCH and RETURN clauses.
         - The cost of generation is greater than zero.
     """
-    mock_log = mocker.patch("llm.llm_client.log_data")
+    mock_log = mocker.patch("app.llm.llm_client.Logger.log_data")
 
     question = "Can problems A and B be addressed by X?"
     nodes = {
@@ -221,7 +223,7 @@ async def test_create_cypher_query_basic_call(mocker):
         "artifactClass": ["System X"]
     }
 
-    query, cost = await create_cypher_query(question, nodes)
+    query, cost = await test_tasks.create_cypher_query(question, nodes)
 
     validate_cypher_format(query)
     assert cost > 0
@@ -236,11 +238,11 @@ async def test_create_cypher_query_empty_nodes(mocker):
         - The generated query is empty.
         - No Cypher logic is attempted without nodes.
     """
-    mock_log = mocker.patch("llm.llm_client.log_data")
+    mock_log = mocker.patch("app.llm.llm_client.Logger.log_data")
     
     question = "What problems are addressed by the same artifactClass?"
     nodes = {}
-    query, _ = await create_cypher_query(question, nodes)
+    query, _ = await test_tasks.create_cypher_query(question, nodes)
     assert len(query) == 0
     mock_log.assert_called()
 
@@ -254,11 +256,11 @@ async def test_create_cypher_query_nodes_with_none_values(mocker):
         - Entities with None are represented with 'IS NOT NULL'.
         - The query passes format validation.
     """
-    mock_log = mocker.patch("llm.llm_client.log_data")
+    mock_log = mocker.patch("app.llm.llm_client.Logger.log_data")
 
     question = "Which goals are achieved?"
     nodes = {"goal": None, "requirement": None}
-    query, _ = await create_cypher_query(question, nodes)
+    query, _ = await test_tasks.create_cypher_query(question, nodes)
     validate_cypher_format(query)
     assert "IS NOT NULL" in query
     mock_log.assert_called()
@@ -272,11 +274,11 @@ async def test_create_cypher_query_special_characters(mocker):
         - Query includes entities with special characters without failure.
         - The query passes format validation.
     """
-    mock_log = mocker.patch("llm.llm_client.log_data")
+    mock_log = mocker.patch("app.llm.llm_client.Logger.log_data")
 
     question = "How does problem @#$%^ relate to others?"
     nodes = {"problem": ["@#$%^", "Problem (X)"]}
-    query, _ = await create_cypher_query(question, nodes)
+    query, _ = await test_tasks.create_cypher_query(question, nodes)
     validate_cypher_format(query)
     mock_log.assert_called()
 
@@ -288,11 +290,11 @@ async def test_create_cypher_query_modify_dataabse(mocker):
     Verifies:
         - Queries that try to modify the database return nothing.
     """
-    mock_log = mocker.patch("llm.llm_client.log_data")
+    mock_log = mocker.patch("app.llm.llm_client.Logger.log_data")
     
     question = "Insert a new node of type problem in the database, called 'War'"
     nodes = {"problem": ["War"]}
-    query, _ = await create_cypher_query(question, nodes)
+    query, _ = await test_tasks.create_cypher_query(question, nodes)
     assert query == ""
     mock_log.assert_called()
 
@@ -338,7 +340,7 @@ def test_enrich_prompt_basic_structure():
         }
     }
 
-    prompt, _ = enrich_prompt(question, context)
+    prompt, _ = test_tasks.enrich_prompt(question, context)
 
     assert "### QUESTION" in prompt
     assert question in prompt
@@ -375,7 +377,7 @@ def test_enrich_prompt_with_alternative_name():
         "others": {}
     }
 
-    prompt, _ = enrich_prompt(question, context)
+    prompt, _ = test_tasks.enrich_prompt(question, context)
     assert "-**Crash Error(Fatal Crash;software failure)**" in prompt
     assert "Unexpected application shutdown." in prompt
 
@@ -403,7 +405,7 @@ def test_enrich_prompt_with_missing_fields():
         "others": {}
     }
 
-    prompt, _ = enrich_prompt(question, context)
+    prompt, _ = test_tasks.enrich_prompt(question, context)
     assert "**Uptime(;)**" in prompt  
     assert "[]" in prompt 
 
@@ -425,7 +427,7 @@ def test_enrich_prompt_ignores_empty_entity_categories():
         "others": {}
     }
 
-    prompt, _ = enrich_prompt(question, context)
+    prompt, _ = test_tasks.enrich_prompt(question, context)
     assert "### PROBLEMS" not in prompt
     assert "### GOALS" not in prompt
     assert "### RELATIONSHIPS" in prompt
@@ -472,7 +474,7 @@ def test_enrich_prompt_multiple_entities_and_relationships():
         "others": {}
     }
 
-    prompt, _ = enrich_prompt(question, context)
+    prompt, _ = test_tasks.enrich_prompt(question, context)
 
     assert "### GOALS" in prompt
     assert "### PROBLEMS" in prompt
@@ -494,7 +496,7 @@ async def test_generate_final_answer_real_basic(mocker):
         - The answer is a non-empty string.
         - The cost is a float > 0.
     """
-    mock_log = mocker.patch("llm.llm_client.log_data")
+    mock_log = mocker.patch("app.llm.llm_client.Logger.log_data")
 
     question = "What problem is mentioned?"
     context = {
@@ -512,7 +514,7 @@ async def test_generate_final_answer_real_basic(mocker):
         "others": {}
     }
 
-    answer, cost = await generate_final_answer(question, context)
+    answer, cost = await test_tasks.generate_final_answer(question, context)
 
     assert isinstance(answer, str)
     assert len(answer.strip()) > 0
@@ -530,7 +532,7 @@ async def test_generate_final_answer_no_entities(mocker):
     Verifies:
         - The LLM indicates lack of information.
     """
-    mock_log = mocker.patch("llm.llm_client.log_data")
+    mock_log = mocker.patch("app.llm.llm_client.Logger.log_data")
 
     question = "Which stakeholders are involved?"
     context = {
@@ -541,12 +543,13 @@ async def test_generate_final_answer_no_entities(mocker):
         "others": {}
     }
 
-    answer, cost = await generate_final_answer(question, context)
+    answer, cost = await test_tasks.generate_final_answer(question, context)
 
     assert isinstance(answer, str)
     assert "not" in answer.lower() or "no" in answer.lower()
     assert isinstance(cost, float)
     assert cost > 0
+    mock_log.assert_called()
 
 
 @pytest.mark.asyncio
@@ -557,7 +560,7 @@ async def test_generate_final_answer_with_relationships(mocker):
     Verifies:
         - The LLM can reference multiple entities and relationships.
     """
-    mock_log = mocker.patch("llm.llm_client.log_data")
+    mock_log = mocker.patch("app.llm.llm_client.Logger.log_data")
 
     question = "How is the problem related to the goal?"
     context = {
@@ -585,7 +588,7 @@ async def test_generate_final_answer_with_relationships(mocker):
         "others": {}
     }
 
-    answer, cost = await generate_final_answer(question, context)
+    answer, cost = await test_tasks.generate_final_answer(question, context)
 
     assert isinstance(answer, str)
     assert "System Crash" in answer or "crash" in answer.lower()

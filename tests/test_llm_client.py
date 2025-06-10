@@ -1,5 +1,8 @@
 import pytest
-from app.llm.llm_client import *
+import tiktoken
+from app.llm.llm_client import LlmClient
+
+test_client = LlmClient()
 
 #-------calculate_token_cost------
 def test_calculate_token_cost_llm():
@@ -10,7 +13,7 @@ def test_calculate_token_cost_llm():
         - Cost is calculated based on input and output tokens.
         - Used the correct costs from MODEL_INFO.
     """
-    cost = calculate_token_cost("gpt-4.1", input_tokens=1000, output_tokens=500)
+    cost = test_client.calculate_token_cost("gpt-4.1", input_tokens=1000, output_tokens=500)
     expected_cost = (1000/1000) * 0.002 + (500/1000) * 0.008 #Pricing per 1k tokens
 
     assert round(cost, 6) == round(expected_cost, 6)
@@ -23,7 +26,7 @@ def test_calculate_token_cost_embedding():
     Verifies:
         - Cost is calculated using total_tokens.
     """
-    cost = calculate_token_cost("text-embedding-3-large", total_tokens=1000)
+    cost = test_client.calculate_token_cost("text-embedding-3-large", total_tokens=1000)
 
     assert round(cost, 6) == 0.00013 #1k tokens cost 0.00013$
 
@@ -36,7 +39,7 @@ def test_calculate_token_cost_unknown_model():
         - Only models in MODEL_INFO are accepted.
     """
     with pytest.raises(ValueError):
-        calculate_token_cost("unknown-model", input_tokens=100, output_tokens=100)
+        test_client.calculate_token_cost("unknown-model", input_tokens=100, output_tokens=100)
 
 def test_calculate_token_cost_wrong_tokens():
     """
@@ -47,9 +50,9 @@ def test_calculate_token_cost_wrong_tokens():
         - Must not pass total_tokens to a non-embedding model.
     """
     with pytest.raises(ValueError):
-        calculate_token_cost("gpt-4.1-nano", input_tokens=100) #Must have output_token
+        test_client.calculate_token_cost("gpt-4.1-nano", input_tokens=100) #Must have output_token
     with pytest.raises(ValueError):
-        calculate_token_cost("gpt-4.1", total_tokens=100) #Cannot use total_tokens
+        test_client.calculate_token_cost("gpt-4.1", total_tokens=100) #Cannot use total_tokens
 
 #-------truncate_prompt------
 def test_truncate_prompt_within_limit():
@@ -61,8 +64,8 @@ def test_truncate_prompt_within_limit():
         - 'truncated' flag is False.
     """
     short_prompt = "Short text"
-    encoding = MODEL_INFO["gpt-4.1-nano"]["encoding"]
-    result, truncated = truncate_prompt(short_prompt, encoding, max_tokens=100)
+    encoding = test_client.MODEL_INFO["gpt-4.1-nano"]["encoding"]
+    result, truncated = test_client.truncate_prompt(short_prompt, encoding, max_tokens=100)
 
     assert result == short_prompt
     assert truncated is False
@@ -78,10 +81,10 @@ def test_truncate_prompt_exceeds_limit():
         - Output is a string.
     """
     long_prompt = "long text " * 2000
-    encoding_name = MODEL_INFO["gpt-4.1-nano"]["encoding"]
+    encoding_name = test_client.MODEL_INFO["gpt-4.1-nano"]["encoding"]
     encoding = tiktoken.get_encoding(encoding_name)
 
-    result, truncated = truncate_prompt(long_prompt, encoding_name, max_tokens=10)
+    result, truncated = test_client.truncate_prompt(long_prompt, encoding_name, max_tokens=10)
     token_count = len(encoding.encode(result))
 
     assert isinstance(result, str)
@@ -102,9 +105,9 @@ async def test_call_llm_raises_value_errors():
     system_prompt="Greetings"
     
     with pytest.raises(ValueError):
-        await call_llm(prompt, system_prompt, "unknown model")
+        await test_client.call_llm(prompt, system_prompt, "unknown model")
     with pytest.raises(ValueError):
-        await call_llm(prompt, system_prompt, temperature=3.0)
+        await test_client.call_llm(prompt, system_prompt, temperature=3.0)
 
 #-----call_llm_structured------
 @pytest.mark.asyncio
@@ -121,11 +124,11 @@ async def test_call_llm_structured_raises_value_errors():
     system_prompt="Greetings"
     
     with pytest.raises(ValueError):
-        await call_llm_structured(prompt, system_prompt, text_format="question", model="unknown model 2")
+        await test_client.call_llm_structured(prompt, system_prompt, text_format="question", model="unknown model 2")
     with pytest.raises(ValueError):
-        await call_llm_structured(prompt, system_prompt, text_format="question", temperature=-3.0)
+        await test_client.call_llm_structured(prompt, system_prompt, text_format="question", temperature=-3.0)
     with pytest.raises(ValueError):
-        await call_llm_structured(prompt, system_prompt, text_format="unknown")
+        await test_client.call_llm_structured(prompt, system_prompt, text_format="unknown")
 
 #-----get_embedding------
 @pytest.mark.asyncio
@@ -139,4 +142,4 @@ async def test_get_embedding_raises_value_errors():
     prompt="Text"
 
     with pytest.raises(ValueError):
-        await get_embedding(prompt, model="unknown")
+        await test_client.get_embedding(prompt, model="unknown")

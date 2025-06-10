@@ -2,7 +2,9 @@ import os
 import json
 import tempfile
 from unittest.mock import patch
-from app.logs.log_reader import read_data_logs, read_error_logs
+from app.logs.log_reader import LogReader
+
+test_reader = LogReader()
 
 def write_lines(path: str, lines: list[dict]):
     """
@@ -35,8 +37,8 @@ def test_read_data_logs_reads_valid_lines():
         write_lines(data_log, entries)
 
         #Patch log path and read entries
-        with patch("app.logs.log_reader.DATA_LOG", data_log):
-            logs = read_data_logs()
+        with patch("app.logs.log_reader.LogReader.DATA_LOG", data_log):
+            logs = test_reader.read_data_logs()
 
         assert len(logs) == 2
         assert logs[0]["message"] == "hey"
@@ -49,8 +51,8 @@ def test_read_data_logs_returns_empty_list_if_missing():
         - The function handles missing files correctly.
         - An empty list is returned instead of an exception.
     """
-    with patch("app.logs.log_reader.DATA_LOG", "/non/existent/data.jsonl"):
-        logs = read_data_logs()
+    with patch("app.logs.log_reader.LogReader.DATA_LOG", "/non/existent/data.jsonl"):
+        logs = test_reader.read_data_logs()
         assert logs == []
 
 def test_read_data_logs_skips_invalid_json():
@@ -64,8 +66,8 @@ def test_read_data_logs_skips_invalid_json():
             f.write("{invalid json line}\n")
             f.write(json.dumps({"message": "valid log"}) + "\n")
 
-        with patch("app.logs.log_reader.DATA_LOG", log_path):
-            logs = read_data_logs()
+        with patch("app.logs.log_reader.LogReader.DATA_LOG", log_path):
+            logs = test_reader.read_data_logs()
 
         assert isinstance(logs, list)
         assert len(logs) == 1 
@@ -90,8 +92,8 @@ def test_read_error_logs_parses_all_valid_lines():
         write_lines(error_log, entries)
 
         #Patch log path and read entries
-        with patch("app.logs.log_reader.ERROR_LOG", error_log):
-            logs = read_error_logs()
+        with patch("app.logs.log_reader.LogReader.ERROR_LOG", error_log):
+            logs = test_reader.read_error_logs()
 
         assert len(logs) == 2
         assert logs[0]["error_type"] == "ValidationError"
@@ -104,8 +106,8 @@ def test_read_error_logs_returns_empty_list_if_missing():
         - The function handles missing file paths correctly.
         - Returns an empty list rather than raising an exception.
     """
-    with patch("app.logs.log_reader.ERROR_LOG", "/non/existent/path.jsonl"):
-        logs = read_error_logs()
+    with patch("app.logs.log_reader.LogReader.ERROR_LOG", "/non/existent/path.jsonl"):
+        logs = test_reader.read_error_logs()
         assert logs == []
 
 def test_read_error_logs_skips_invalid_json():
@@ -120,8 +122,8 @@ def test_read_error_logs_skips_invalid_json():
             f.write("{invalid json line}\n")
             f.write(json.dumps({"message": "valid log"}) + "\n")
 
-        with patch("app.logs.log_reader.ERROR_LOG", log_path):
-            logs = read_error_logs()
+        with patch("app.logs.log_reader.LogReader.ERROR_LOG", log_path):
+            logs = test_reader.read_error_logs()
 
         assert isinstance(logs, list)
         assert len(logs) == 1 

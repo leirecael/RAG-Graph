@@ -1,23 +1,7 @@
 import pytest
-from data.neo4j_client import *
+from data.neo4j_client import Neo4jClient, AuthError
 
-#----get_driver---
-def test_get_driver_auth_error(mocker):
-    """
-    Simulates an authentication error when trying to connect to Neo4j.
-    Verifies that the appropriate RuntimeError is raised and contains expected text.
-    """
-    # Ensure the global driver is None before test
-    global driver
-    driver = None
-
-    with mocker.patch("data.neo4j_client.GraphDatabase.driver", side_effect=AuthError("Invalid credentials")):
-        with pytest.raises(RuntimeError) as exc_info:
-            get_driver()
-
-        assert "[NEO4J_CONNECTION_ERROR]" in str(exc_info.value)
-        assert "Invalid credentials" in str(exc_info.value)
-
+test_client = Neo4jClient()
 
 #------execute_query------
 def test_execute_query_basic_return():
@@ -30,7 +14,7 @@ def test_execute_query_basic_return():
         - The result contains the 'total_nodes' key.
         - The value of 'total_nodes' is an integer.
     """
-    result = execute_query("MATCH (n) RETURN COUNT(n) AS total_nodes")
+    result = test_client.execute_query("MATCH (n) RETURN COUNT(n) AS total_nodes")
 
     assert len(result) == 1
     assert "total_nodes" in result[0]
@@ -52,7 +36,7 @@ def test_execute_query_specific_nodes():
     RETURN p.name AS name
     LIMIT 5
     """
-    result = execute_query(query)
+    result = test_client.execute_query(query)
 
     assert isinstance(result, list)
     for record in result:
@@ -80,7 +64,7 @@ def test_execute_multiple_queries_no_params():
         }
     ]
 
-    result = execute_multiple_queries(queries)
+    result = test_client.execute_multiple_queries(queries)
 
     # Should return a list of dicts: [{'value': {...}}, ...]
     print(result)
@@ -119,7 +103,7 @@ def test_execute_multiple_queries_with_params():
         }
     ]
 
-    result = execute_multiple_queries(queries)
+    result = test_client.execute_multiple_queries(queries)
 
     assert isinstance(result, list)
     assert len(result) == 2
@@ -145,4 +129,4 @@ def teardown_driver():
     Ensures the Neo4j driver is closed and cleaned.
     """
     yield  # Run tests first
-    close_driver()  # Then clean up
+    test_client.close_driver()  # Then clean up

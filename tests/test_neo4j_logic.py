@@ -1,6 +1,8 @@
-from app.logic.neo4j_logic import generate_similarity_queries, generate_similarity_queries_no_label, parse_similarity_results, parse_related_nodes_results, remove_duplicate_text, remove_duplicate_text_in_list
+from app.logic.neo4j_logic import Neo4jLogic
 from app.models.entity import Entity
 import pytest
+
+test_logic = Neo4jLogic()
 
 #-----generate_similarity_queries---------
 @pytest.mark.parametrize("entities,expected_len", [
@@ -17,7 +19,7 @@ def test_generate_similarity_queries_variants(entities, expected_len):
         - The query references the entity type.
         - The parameters of embedding, top_k and threshold matches the input ones.
     """
-    result = generate_similarity_queries(entities, threshold=0.7, top_k=5)
+    result = test_logic.generate_similarity_queries(entities, threshold=0.7, top_k=5)
     assert isinstance(result, list)
     assert len(result) == expected_len
     for entry, ent in zip(result, entities):
@@ -33,7 +35,7 @@ def test_generate_similarity_queries_empty_input():
     Verifies:
         - The function safely returns an empty list with no errors.
     """
-    result = generate_similarity_queries([])
+    result = test_logic.generate_similarity_queries([])
     assert result == []
 
 def test_generate_similarity_queries_unknown_label():
@@ -56,7 +58,7 @@ def test_generate_similarity_queries_unknown_label():
     ]
 
     with pytest.raises(ValueError):
-        generate_similarity_queries(entities, threshold=0.7, top_k=5)
+        test_logic.generate_similarity_queries(entities, threshold=0.7, top_k=5)
 
 #-----generate_similarity_queries_no_label---------
 @pytest.mark.parametrize("entities,expected_len", [
@@ -73,7 +75,7 @@ def test_generate_similarity_queries_no_label_variants(entities, expected_len):
         - The query does not care about the entity type.
         - The parameters of embedding, top_k and threshold matches the input ones.
     """
-    result = generate_similarity_queries_no_label(entities, threshold=0.7, top_k=5)
+    result = test_logic.generate_similarity_queries_no_label(entities, threshold=0.7, top_k=5)
     assert isinstance(result, list)
     assert len(result) == expected_len
     for entry, ent in zip(result, entities):
@@ -89,7 +91,7 @@ def test_generate_similarity_queries_no_label_empty_input():
     Verifies:
         - The function safely returns an empty list with no errors.
     """
-    result = generate_similarity_queries_no_label([])
+    result = test_logic.generate_similarity_queries_no_label([])
     assert result == []
 
 #------parse_similarity_results---------
@@ -106,7 +108,7 @@ def test_parse_similarity_results_groups_by_first_label():
         {"value": {"name": "Item B", "labels": ["goal"]}},
         {"value": {"name": "Item C", "labels": ["problem"]}}
     ]
-    parsed = parse_similarity_results(fake_results)
+    parsed = test_logic.parse_similarity_results(fake_results)
 
     assert parsed == {
         "goal": ["Item A", "Item B"],
@@ -120,7 +122,7 @@ def test_parse_similarity_results_empty_results():
     Verifies:
         - Empty results do not return error.
     """
-    parsed = parse_similarity_results([])
+    parsed = test_logic.parse_similarity_results([])
 
     assert parsed == {}
 
@@ -149,7 +151,7 @@ def test_parse_related_nodes_results_others_and_deduplication():
             "note": ["Security ; performance ; security", " Usability ; usability "]
         }
     ]
-    result = parse_related_nodes_results(fake_records)
+    result = test_logic.parse_related_nodes_results(fake_records)
 
     assert "others" in result
     assert isinstance(result["others"], dict)
@@ -182,7 +184,7 @@ def test_parse_related_nodes_results_with_multiple_labels():
             "labels(x)": ["problem", "goal"]
         }
     ]
-    result = parse_related_nodes_results(fake_records)
+    result = test_logic.parse_related_nodes_results(fake_records)
 
     assert "Hybrid Node" in result["entities"]["problems"] and "Hybrid Node" in result["entities"]["goals"]
 
@@ -209,7 +211,7 @@ def test_parse_related_nodes_results_basic_case():
         }
     ]
 
-    result = parse_related_nodes_results(fake_records)
+    result = test_logic.parse_related_nodes_results(fake_records)
     
     assert "problems" in result["entities"]
     assert "contexts" in result["entities"]
@@ -239,7 +241,7 @@ def test_parse_related_nodes_results_ignores_unknown_labels():
             "labels(x)": ["unknown"]
         }
     ]
-    result = parse_related_nodes_results(fake_records)
+    result = test_logic.parse_related_nodes_results(fake_records)
     assert all(not values for values in result["entities"].values())
     assert result["relationships"] == []
 
@@ -268,7 +270,7 @@ def test_parse_related_nodes_results_no_duplicates_in_relationships():
             "labels(c)": ["context"]
         }
     ]
-    result = parse_related_nodes_results(fake_records)
+    result = test_logic.parse_related_nodes_results(fake_records)
     rels = result["relationships"]
     assert len(rels) == 1 
 
@@ -287,7 +289,7 @@ def test_parse_related_nodes_results_includes_alternative_name():
             "labels(p)": ["problem"]
         }
     ]
-    result = parse_related_nodes_results(fake_records)
+    result = test_logic.parse_related_nodes_results(fake_records)
     entity = result["entities"]["problems"]["Problem A"]
     assert entity["alternativeName"] == "Alt A"
 
@@ -301,7 +303,7 @@ def test_remove_duplicate_text_normalization():
         - The output string is trimmed and normalized.
     """
     text = "Improves efficiency; improves efficiency ;   Security ; security ;"
-    cleaned = remove_duplicate_text(text)
+    cleaned = test_logic.remove_duplicate_text(text)
     assert cleaned == "Improves efficiency; Security"
 
 
@@ -315,7 +317,7 @@ def test_remove_duplicate_text_in_list_deduplicates_case_insensitive():
         - The original order of first occurrences is preserved.
     """
     input_data = ["Security", "security", "SECURITY", "Efficiency", "efficiency "]
-    cleaned = remove_duplicate_text_in_list(input_data)
+    cleaned = test_logic.remove_duplicate_text_in_list(input_data)
     assert cleaned == ["Security", "Efficiency"]
 
 
