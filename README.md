@@ -69,3 +69,7 @@ Once the app is running, go to your web browser and visit:
 ```text
 http://localhost:8501/
 ```
+
+## Database
+
+The database Neo4j dump can be found in the following link: [Download from Google Drive](https://drive.google.com/file/d/1UTapowo3_GZdngxjpkiyThdrXkiPXQkR/view?usp=sharing)
