@@ -4,6 +4,21 @@ from typing import List, Dict
 
 
 class LogReader:
+    """
+    Reads logs from JSONL log files.
+
+    This class provides methods to read application data logs and error logs, each line of which is
+    stored as a JSON object.
+
+    Attributes:
+        LOG_DIR (str): Directory where log files are stored.
+        DATA_LOG (str): Path to the data log file (`data.jsonl`).
+        ERROR_LOG (str): Path to the error log file (`errors.jsonl`).
+
+    Methods:
+        read_data_logs(): Reads structured entries from the data log file.
+        read_error_logs(): Reads structured entries from the error log file.
+    """
 
     def __init__(self):
         pass

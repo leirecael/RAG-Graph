@@ -5,8 +5,31 @@ from logic.logs_service import LogsService
 from logs.logger import Logger
 import pandas as pd
 
-class GUIInterface():
+class GUI():
+    """
+    A Streamlit graphical user interface for interacting with a Retrieval-Augmented Generation (RAG) system based on a knowladge graph.
+
+    This class initializes and manages backend services such as the Orchestrator, Logger, and LogsService,
+    ensuring they are stored in the Streamlit session state. It handles Neo4j database connection errors
+    and logs errors when they occur.
+
+    Attributes:
+        neo4j_error (str): Stores an error message if a Neo4j connection issue occurs.
+        logger (Logger): Logging utility to capture errors.
+        orchestrator (Orchestrator): Backend orchestrator handling the core RAG logic.
+        log_service (LogsService): Service for retrieving and displaying log data and statistics.
+
+    Methods:
+        start_interface(): Launches the Streamlit interface with options for querying, logs, history, and statistics.
+    """
+    
     def __init__(self): 
+        """
+        Initializes the GUI interface by setting up essential backend services in the Streamlit session state.
+
+        Ensures that the Logger, Orchestrator, and LogsService instances are created and accessible globally
+        within the session. Handles and logs Neo4j connection errors.
+        """
         self.neo4j_error = ""     
         if "logger" not in st.session_state:
             st.session_state.logger = Logger()

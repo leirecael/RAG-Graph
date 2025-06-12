@@ -1,6 +1,20 @@
 from models.entity import Entity
 
 class Neo4jLogic:
+    """
+    Contains logic for constructing Cypher queries and parsing results for graph queries.
+
+    This class supports generating similarity search queries with or without label constraints,
+    parsing results from Neo4j, and removing duplicate textual data from query outputs.
+
+    Methods:
+        generate_similarity_queries(): Generate label-based similarity queries.
+        generate_similarity_queries_no_label(): Generate similarity queries ignoring node labels.
+        parse_similarity_results(): Parse similarity search results grouped by entity types.
+        parse_related_nodes_results(): Parse related node records into structured data.
+        remove_duplicate_text(): Remove duplicate semicolon-separated segments in a string.
+        remove_duplicate_text_in_list(): Clean and deduplicate a list of strings.
+    """
 
     def __init__(self):
         pass

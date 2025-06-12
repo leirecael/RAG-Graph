@@ -3,6 +3,22 @@ import os
 from datetime import datetime
 
 class Logger:
+    """
+    Logs both application data and errors in JSON Lines format.
+
+    This class writes logs about data and errors that happen in the system. 
+    The data can be used to analyze different types of metrics.
+
+    Attributes:
+        LOG_DIR (str): Directory where log files are stored.
+        DATA_LOG (str): Path to the data log file (`data.jsonl`).
+        ERROR_LOG (str): Path to the error log file (`errors.jsonl`).
+
+    Methods:
+        log_data(data): Logs general data.
+        log_error(error_type, error_details): Logs errors.
+    """
+    
     def __init__(self):
         pass
 

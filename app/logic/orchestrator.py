@@ -12,27 +12,37 @@ import json
 from presidio_analyzer import AnalyzerEngine
 
 class Orchestrator:
+    """
+    Central coordinator for handling natural language questions using a graph-based RAG pipeline.
+
+    This class integrates multiple components including a Neo4j client, logic handlers,
+    language model tasks, logging, and PII detection to process user questions.
+
+    Attributes:
+        neo4j_client (Neo4jClient): Communicates with the Neo4j graph database.
+        llm_tasks (LlmTasks): Handles tasks involving the language model.
+        neo4j_logic (Neo4jLogic): Handles the queries sent to the database and the responses received.
+        logger (Logger): Used for logging data and errors during question processing.
+        pii_analyzer (AnalyzerEngine): Detects personally identifiable information (PII) in user input.
+
+    Methods:
+        contains_pii(text): Detects whether the input contains PII.
+        sanitize_input(text): Cleans input by removing special characters.
+        process_question(userQuestion): Full RAG pipeline for processing and answering a user's question.
+    """
+
     def __init__(self):
+        """
+        Initializes the Orchestrator and its supporting components.
+
+        Sets up clients and services required for handling RAG logic, logging, and
+        PII detection.
+        """
         self.neo4j_client = Neo4jClient()
         self.llm_tasks = LlmTasks()
         self.neo4j_logic = Neo4jLogic()
         self.logger = Logger()
         self.pii_analyzer = AnalyzerEngine()
-   
-    #PII entities to block
-    PII_ENTITIES = [
-        "EMAIL_ADDRESS",
-        "PHONE_NUMBER",
-        "CREDIT_CARD",
-        "IBAN_CODE",
-        "PERSON",
-        "IP_ADDRESS",
-        "MEDICAL_LICENSE",
-        "URL",
-        "CRYPTO",
-        "ES_NIF",
-        "ES_NIE"
-    ]
 
     def contains_pii(self, text: str) -> bool:
         """
@@ -44,6 +54,20 @@ class Orchestrator:
         Returns:
             bool: True if PII is detected, False otherwise.
         """
+        #PII entities to block
+        PII_ENTITIES = [
+            "EMAIL_ADDRESS",
+            "PHONE_NUMBER",
+            "CREDIT_CARD",
+            "IBAN_CODE",
+            "PERSON",
+            "IP_ADDRESS",
+            "MEDICAL_LICENSE",
+            "URL",
+            "CRYPTO",
+            "ES_NIF",
+            "ES_NIE"
+        ]
         results = self.pii_analyzer.analyze(text=text, entities=self.PII_ENTITIES, language='en')
         return len(results) > 0
 

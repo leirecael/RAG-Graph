@@ -5,8 +5,29 @@ from models.question import Question
 
 
 class LlmTasks:
+    """
+    Handles language model tasks such as validating questions, extracting entities,
+    generating embeddings, creating Cypher queries, and producing final answers.
 
-    def __init__(self,):
+    Interacts with the LLM client asynchronously and tracks API costs.
+
+    Attributes:
+        llm_client (LlmClient): Instance of LlmClient used to interact with the language model API.
+
+    Methods:
+        validate_question(): Validate if a question is inside the domain context and is safe.
+        extract_entities(): Extract entities from the question based on the graph schema.
+        generate_entity_embeddings(): Generates embeddings for entities.
+        create_cypher_query(): Creates a Cypher query based on the user question, available nodes and the database schema.
+        generate_final_answer(): Generates the answer to the user question using an enriched context based on the information from the database.
+        enrich_prompt(): Parses the information from the database in a structured format to enrich the user question.
+    """
+
+    def __init__(self):
+        """
+        Initializes the LlmTasks with a LlmClient instance for communicating with the LLM.
+        """
+        
         self.llm_client = LlmClient()
 
     async def validate_question(self, question: str)->tuple[Question, float]:

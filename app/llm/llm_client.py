@@ -10,6 +10,26 @@ from logs.logger import Logger
 
 
 class LlmClient:
+    """
+    Client to interact asynchronously with OpenAI's language models and embeddings endpoint.
+
+    Contains pricing info, model limits, and methods to call LLMs with plain or structured output,
+    generate embeddings, calculate costs, and truncate prompts.
+
+    Attributes:
+        client (AsyncOpenAI): Asynchronous OpenAI API client instance.
+        logger (Logger): Logger instance for logging API usage and errors.
+        MODEL_INFO (dict): Pricing and limits for each model.
+        RESPONSE_FORMAT (dict): Mapping of response format keys to data model classes.
+
+    Methods:
+        call_llm(): Calls an OpenAI model with an user and system prompt, logs the interaction and does not expect a structured output.
+        call_llm_structured(): Calls an OpenAI model with an user and system prompt, logs the interaction and expects a structured output.
+        get_embedding(): Calls the embedding endpoint to embedd a text.
+        calculate_token_cost(): Calculates the total cost for the used tokens based on the models price.
+        truncate_prompt(): Shortens the user prompt if it exceeds the limit of the model it is going to be used on.
+    """
+
     #Set API key
     openai.api_key = OPENAI_API_KEY
 
@@ -29,6 +49,9 @@ class LlmClient:
     }
 
     def __init__(self):
+        """
+        Initializes the LlmClient with a AsyncOpenAI instance for communicating with the OpenAI client and a Logger instance for logging data.
+        """
         self.client = AsyncOpenAI()
         self.logger = Logger()
 

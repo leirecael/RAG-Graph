@@ -2,8 +2,24 @@ from logs.log_reader import LogReader
 import pandas as pd
 
 class LogsService:
+    """
+    Used to parse logs and calculate metrics.
+
+    This class uses LogReader to fetch logs and provides methods to parse
+    logs and compute statistics grouped by log type and task.
+
+    Attributes:
+        reader (LogReader): Instance of LogReader used to read log files.
+
+    Methods:
+        parse_logs(): Retrieves and parses logs from the system.
+        get_log_statistics_by_type(): Computes statistics grouped by log type and task.
+    """
 
     def __init__(self):
+        """
+        Initializes the LogsService with a LogReader instance for reading log files.
+        """
         self.reader = LogReader()
 
     def parse_logs(self)->tuple[dict,list[dict]]:

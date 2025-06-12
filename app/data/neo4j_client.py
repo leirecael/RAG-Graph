@@ -3,8 +3,24 @@ from neo4j.exceptions import ServiceUnavailable, AuthError, AuthConfigurationErr
 from config.config import NEO4J_URI,NEO4J_PASSWORD,NEO4J_USER
 
 class Neo4jClient:
+    """
+    Client for managing connections and queries to a Neo4j database.
+
+    Attributes:
+        driver (Driver): Neo4j driver instance for database communication.
+
+    Methods:
+        test_connection(): Tests if the database can be reached and access credentials are valid. Raises an exception if not.
+        close_driver(): Closes the connection with the database.
+        execute_multiple_queries(): Executes multiple queries with their respective parameters at the same time. Uses APOC.
+        execute_query(): Executes a single query and its parameters.
+    """
 
     def __init__(self):
+        """
+        Initializes the Neo4j driver with configured URI and credentials,
+        and tests the connection to ensure it is valid.
+        """
         self.driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
         self.test_connection()
     

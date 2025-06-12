@@ -1,7 +1,8 @@
-from presentation.gui import GUIInterface
+from presentation.gui import GUI
 
+#Main code to call the app. Starts the interface.
 def main():
-    gui = GUIInterface()
+    gui = GUI()
     gui.start_interface()
 
 if __name__ == "__main__":
