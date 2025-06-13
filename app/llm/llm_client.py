@@ -25,8 +25,8 @@ class LlmClient:
     Methods:
         call_llm(): Calls an OpenAI model with an user and system prompt, logs the interaction and does not expect a structured output.
         call_llm_structured(): Calls an OpenAI model with an user and system prompt, logs the interaction and expects a structured output.
-        get_embedding(): Calls the embedding endpoint to embedd a text.
-        calculate_token_cost(): Calculates the total cost for the used tokens based on the models price.
+        get_embedding(): Calls the embedding endpoint to embed a text.
+        calculate_token_cost(): Calculates the total cost for the used tokens based on the model's price.
         truncate_prompt(): Shortens the user prompt if it exceeds the limit of the model it is going to be used on.
     """
 

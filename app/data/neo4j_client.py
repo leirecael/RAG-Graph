@@ -27,7 +27,6 @@ class Neo4jClient:
     def test_connection(self) -> None:
         """
         Tests the connection to the database. If there is any problem, an exception is raised.
-        
         """
         try:
             with self.driver.session() as session:
