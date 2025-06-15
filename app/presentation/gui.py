@@ -132,6 +132,9 @@ class GUI():
                                 except Exception as e:
                                     #Display error if something goes wrong
                                     response_placeholder.error("An unexpected error occurred. Try again.")
+                                    self.logger.log_error("UnexpectedError", {
+                                        "error": str(e), 
+                                    })
                                                         
                     else:
                         st.warning("Please enter a question.")
