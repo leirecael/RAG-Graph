@@ -203,8 +203,6 @@ class Orchestrator:
                     "final_response": json.dumps(similarity_results),
                     "log_duration_sec": end_sim-start_sim,
                 })
-        except RuntimeError as e:
-                raise
         except Exception as e:
                 self.logger.log_error("SimilarityError", {
                     "question": question.value,
@@ -225,7 +223,6 @@ class Orchestrator:
                 #Save the entity to try again with another method.
                 not_found_list.append(entity)
                 
-
         for entity in entities_with_no_value:
             all_relevant_nodes[entity.type] = None
 
@@ -269,8 +266,6 @@ class Orchestrator:
                     return f"No data found, even after retry."
                 for label in similarity_results.keys():
                     all_relevant_nodes[label] = similarity_results[label]
-            except RuntimeError as e:
-                raise
             except Exception as e:
                 self.logger.log_error("RetryError", {
                     "question": question.value,
@@ -316,8 +311,6 @@ class Orchestrator:
                 "final_response": json.dumps(related_nodes),
                 "log_duration_sec": end_db-start_db,
             })
-        except RuntimeError as e:
-                raise
         except Exception as e:
             self.logger.log_error("DatabaseQueryError", {
                 "question": question.value,

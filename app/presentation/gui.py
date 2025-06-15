@@ -127,8 +127,9 @@ class GUI():
                                 except RuntimeError as e:
                                     if "API key" in str(e):
                                         response_placeholder.error("Error: The API key is invalid or it was not configured. Verify your credentials.")
-                                    elif "[NEO4J_CONNECTION_ERROR]" in str(e):
-                                        response_placeholder.error("Error: Could not connect to the database. Checks if the DB is running and the configuration is correct.")
+                                        self.logger.log_error("APIKeyError", {
+                                            "error": str(e), 
+                                        })
                                 except Exception as e:
                                     #Display error if something goes wrong
                                     response_placeholder.error("An unexpected error occurred. Try again.")
