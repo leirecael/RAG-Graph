@@ -68,7 +68,7 @@ class Orchestrator:
             "ES_NIF",
             "ES_NIE"
         ]
-        results = self.pii_analyzer.analyze(text=text, entities=self.PII_ENTITIES, language='en')
+        results = self.pii_analyzer.analyze(text=text, entities=PII_ENTITIES, language='en')
         return len(results) > 0
 
     def sanitize_input(self, text: str) -> str:
@@ -108,7 +108,6 @@ class Orchestrator:
         Returns:
             str: Final answer generated based on the retrieved data or an error message.
         """
-
         start = time.time()
         total_cost = 0
 

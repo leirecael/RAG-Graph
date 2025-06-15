@@ -200,13 +200,13 @@ class LlmTasks:
             # RULES
             1. Always use entity types as labels, e.g. (p:problem).
             2. For each entry in AVAILABLE NODES:
-            - If the value is a list, use `name IN [...]`
-            - If the value is None, filter with `name IS NOT NULL`
+            - If the value is a list, use 'name IN [...]'
+            - If the value is None, filter with 'name IS NOT NULL'
             - If multiple nodes of the same type are needed, use aliases like p1, p2.
-            3. Always use `WITH DISTINCT` to eliminate duplicates before RETURN with related nodes.
+            3. Always use 'WITH DISTINCT' to eliminate duplicates before RETURN with related nodes.
             4. If the question asks about general information, relationships may not be needed.
-            5. Use `LIMIT` only when relevant.
-            6. Always return: `name`, `description`, `hypernym`, `alternativeName` and `labels(...)` for all nodes involved. For queries that need 'COUNT' or other types of functions, you can add those fucntions as extra.
+            5. Use 'LIMIT' only when relevant.
+            6. Always return: 'name', 'description', 'hypernym', 'alternativeName' and 'labels(...)' for all nodes involved. For queries that need 'COUNT' or other types of functions, you can add those fucntions as extra.
             7. Do not rename output fields. Maintain standard Cypher return format.
             8. Only generate the Cypher query. Do not add comments or explanations.
             9. You can traverse the graph to look for related ideas. Use all schema relationships that apply.(e.g. artifacts related by problem and requirement, goals related by requirement and problem)
