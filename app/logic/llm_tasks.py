@@ -139,7 +139,7 @@ class LlmTasks:
             {question}
         """
         #Call structured LLM to extract entities, ask for the EntityList model as return output(text_format)
-        response, cost = await self.llm_client.call_llm_structured(prompt, system_prompt, text_format="entitylist", task_name="entity_extraction")
+        response, cost = await self.llm_client.call_llm_structured(prompt, system_prompt, temperature=0.3, text_format="entitylist", task_name="entity_extraction")
 
         return response, cost
 
@@ -250,7 +250,7 @@ class LlmTasks:
             {all_relevant_nodes}
         """
         #Call LLM to generate the query
-        query, cost = await self.llm_client.call_llm(prompt, system_prompt, model= "gpt-4.1",task_name="cypher_generation")
+        query, cost = await self.llm_client.call_llm(prompt, system_prompt, model= "gpt-4.1", temperature=0.3, task_name="cypher_generation")
         return query, cost
 
     async def generate_final_answer(self, question:str, context:dict)->tuple[str,float]:
