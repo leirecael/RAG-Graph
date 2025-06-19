@@ -250,7 +250,7 @@ class LlmTasks:
             {all_relevant_nodes}
         """
         #Call LLM to generate the query
-        query, cost = await self.llm_client.call_llm(prompt, system_prompt, model= "gpt-4.1", temperature=0.3, task_name="cypher_generation")
+        query, cost = await self.llm_client.call_llm(prompt, system_prompt, model= "gpt-4.1", temperature=0.7, task_name="cypher_generation")
         return query, cost
 
     async def generate_final_answer(self, question:str, context:dict)->tuple[str,float]:
